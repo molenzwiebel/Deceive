@@ -7,8 +7,8 @@
     <ProjectGuid>{CFBF4379-0C7C-4DE4-96BB-FE5C7D8C2BF0}</ProjectGuid>
     <OutputType>WinExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>AppearOffline</RootNamespace>
-    <AssemblyName>AppearOffline</AssemblyName>
+    <RootNamespace>Deceive</RootNamespace>
+    <AssemblyName>Deceive</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -71,6 +71,7 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">

@@ -8,11 +8,11 @@ using System.Text;
 using System.Windows.Forms;
 using WebSocketSharp;
 
-namespace AppearOffline
+namespace Deceive
 {
     class Program : ApplicationContext
     {
-        static string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AppearOffline");
+        static string dataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
         static WebSocket socket;
         static Tuple<string, string> lockfileContents;
 
@@ -27,8 +27,8 @@ namespace AppearOffline
             {
                 Icon = SystemIcons.Shield,
                 Visible = true,
-                BalloonTipTitle = "Appear Offline",
-                BalloonTipText = "Appear Offline will run in the background. Right-Click the shield tray icon for more options."
+                BalloonTipTitle = "Deceive",
+                BalloonTipText = "Deceive will run in the background. Right-Click the shield tray icon for more options."
             };
             trayIcon.ShowBalloonTip(5000);
             SetupMenuItems();
@@ -36,7 +36,7 @@ namespace AppearOffline
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem("Appear Offline v0.1");
+            var aboutMenuItem = new MenuItem("Deceive v0.1");
             aboutMenuItem.Enabled = false;
 
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
