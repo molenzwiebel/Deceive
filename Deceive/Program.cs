@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -15,6 +16,22 @@ namespace Deceive
 {
     class MainClass
     {
+        private static readonly Dictionary<string, Tuple<string, int>> REGIONS = new Dictionary<string, Tuple<string, int>>
+        {
+            ["BR"] = new Tuple<string, int>("chat.br.lol.riotgames.com", 5223),
+            ["EUNE"] = new Tuple<string, int>("chat.eun1.lol.riotgames.com", 5223),
+            ["EUW"] = new Tuple<string, int>("chat.euw1.lol.riotgames.com", 5223),
+            ["JP"] = new Tuple<string, int>("chat.jp1.lol.riotgames.com", 5223),
+            ["LA1"] = new Tuple<string, int>("chat.la1.lol.riotgames.com", 5223),
+            ["LA2"] = new Tuple<string, int>("chat.la2.lol.riotgames.com", 5223),
+            ["NA"] = new Tuple<string, int>("chat.na2.lol.riotgames.com", 5223),
+            ["OC1"] = new Tuple<string, int>("chat.oc1.lol.riotgames.com", 5223),
+            ["RU"] = new Tuple<string, int>("chat.ru.lol.riotgames.com", 5223),
+            ["TEST"] = new Tuple<string, int>("chat.na2.lol.riotgames.com", 5223),
+            ["TR"] = new Tuple<string, int>("chat.tr.lol.riotgames.com", 5223)
+        };
+
+        [STAThread]
         public static void Main(string[] args)
         {
             // We are supposed to launch league, so if it's already running something is going wrong.
@@ -55,10 +72,23 @@ namespace Deceive
                 UseShellExecute = false
             };
             Process.Start(startArgs);
+            var incoming = listener.AcceptTcpClient();
 
-            listener.AcceptSocket();
-            Console.WriteLine("Got connection.");
-            Console.Read();
+            // Step 4: Connect sockets.
+            var sslIncoming = new SslStream(incoming.GetStream());
+            var cert = new X509Certificate2(Properties.Resources.certificates);
+            sslIncoming.AuthenticateAsServer(cert);
+
+            var regionDetails = REGIONS[Utils.GetLCURegion()];
+            var outgoing = new TcpClient(regionDetails.Item1, regionDetails.Item2);
+            var sslOutgoing = new SslStream(outgoing.GetStream());
+            sslOutgoing.AuthenticateAsClient(regionDetails.Item1);
+
+            // Step 5: All sockets are now connected, start tray icon.
+            var mainController = new MainController();
+            mainController.StartThreads(sslIncoming, sslOutgoing);
+            Application.EnableVisualStyles();
+            Application.Run(mainController);
         }
     }
 }

@@ -3,6 +3,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace Deceive
@@ -14,6 +15,19 @@ namespace Deceive
         static Utils()
         {
             if (!Directory.Exists(DATA_DIR)) Directory.CreateDirectory(DATA_DIR);
+        }
+
+        /**
+         * Finds the current region as defined in the local league settings.
+         */
+        public static string GetLCURegion()
+        {
+            var league = GetLCUPath();
+            var config = Path.GetDirectoryName(league) + "/Config/LeagueClientSettings.yaml";
+            var contents = File.ReadAllText(config);
+            var matches = new Regex("region: \"(.+?)\"").Match(contents);
+
+            return matches.Groups[1].Value;
         }
 
         /**
