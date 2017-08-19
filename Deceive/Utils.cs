@@ -24,7 +24,13 @@ namespace Deceive
         {
             var league = GetLCUPath();
             var config = Path.GetDirectoryName(league) + "/Config/LeagueClientSettings.yaml";
-            var contents = File.ReadAllText(config);
+
+            // If we're unlucky, we read this file while league has it locked. Copy it over so we can read it.
+            var copy = Path.Combine(DATA_DIR, "LeagueClientSettings.yaml");
+            File.Copy(config, copy);
+            var contents = File.ReadAllText(copy);
+            File.Delete(copy);
+
             var matches = new Regex("region: \"(.+?)\"").Match(contents);
 
             return matches.Groups[1].Value;
