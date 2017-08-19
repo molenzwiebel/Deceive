@@ -6,11 +6,8 @@ using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Windows.Forms;
-using System.Xml;
 
 namespace Deceive
 {
@@ -46,7 +43,6 @@ namespace Deceive
                 );
 
                 if (result != DialogResult.Yes) return;
-
                 Utils.KillLCU();
             }
 
@@ -68,7 +64,7 @@ namespace Deceive
             var startArgs = new ProcessStartInfo
             {
                 FileName = Utils.GetLCUPath(),
-                Arguments = "--system-yaml-override=" + yamlPath,
+                Arguments = "--system-yaml-override=\"" + yamlPath + "\"",
                 UseShellExecute = false
             };
             Process.Start(startArgs);

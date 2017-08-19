@@ -89,41 +89,54 @@ namespace Deceive
 
         private void IncomingLoop()
         {
-            var byteCount = 0;
-            var bytes = new byte[2048];
-
-            do
+            try
             {
-                byteCount = this.incoming.Read(bytes, 0, bytes.Length);
+                var byteCount = 0;
+                var bytes = new byte[2048];
 
-                var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
-
-                // If this is possibly a presence stanza, rewrite it.
-                if (content.Contains("<presence") && this.enabled)
+                do
                 {
-                    this.PossiblyRewriteAndResendPresence(content, this.status);
-                } else
-                {
-                    this.outgoing.Write(bytes, 0, byteCount);
-                }
-            } while (byteCount != 0);
+                    byteCount = this.incoming.Read(bytes, 0, bytes.Length);
 
-            System.Console.WriteLine("Incoming closed.");
-            Application.Exit();
+                    var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
+                    // If this is possibly a presence stanza, rewrite it.
+                    if (content.Contains("<presence") && this.enabled)
+                    {
+                        this.PossiblyRewriteAndResendPresence(content, this.status);
+                    }
+                    else
+                    {
+                        this.outgoing.Write(bytes, 0, byteCount);
+                    }
+                } while (byteCount != 0);
+            }
+            finally
+            {
+                System.Console.WriteLine("Incoming closed.");
+                Application.Exit();
+            }
         }
 
         private void OutgoingLoop()
         {
-            var byteCount = 0;
-            var bytes = new byte[2048];
-
-            do
+            try
             {
-                byteCount = this.outgoing.Read(bytes, 0, bytes.Length);
-                this.incoming.Write(bytes, 0, byteCount);
-            } while (byteCount != 0);
+                var byteCount = 0;
+                var bytes = new byte[2048];
 
-            System.Console.WriteLine("Outgoing closed.");
+                do
+                {
+                    byteCount = this.outgoing.Read(bytes, 0, bytes.Length);
+                    this.incoming.Write(bytes, 0, byteCount);
+                } while (byteCount != 0);
+
+                System.Console.WriteLine("Outgoing closed.");
+            }
+            catch
+            {
+                System.Console.WriteLine("Outgoing errored.");
+                Application.Exit();
+            }
         }
 
         private void PossiblyRewriteAndResendPresence(string content, string targetStatus)
