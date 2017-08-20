@@ -1,4 +1,5 @@
-﻿using Microsoft.WindowsAPICodePack.Dialogs;
+﻿using Microsoft.Win32;
+using Microsoft.WindowsAPICodePack.Dialogs;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -58,12 +59,21 @@ namespace Deceive
         }
 
         /**
-         * Either gets the LCU path from the saved properties, or by prompting the user.
+         * Either gets the LCU path from the saved properties, from registry, or by prompting the user (in case all goes wrong).
          */
         public static string GetLCUPath()
         {
+            string path;
             string configPath = Path.Combine(DATA_DIR, "lcuPath");
-            string path = File.Exists(configPath) ? File.ReadAllText(configPath) : "C:/Riot Games/League of Legends/LeagueClient.exe";
+
+            if (File.Exists(configPath))
+                path = File.ReadAllText(configPath);
+            else
+            {
+                path = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "").ToString();
+                // Remove "RADS" from the string's end
+                path = path.Remove(path.Length - 4) + "LeagueClient.exe";
+            }
 
             while (!IsValidLCUPath(path))
             {
@@ -111,7 +121,7 @@ namespace Deceive
                     return false;
 
                 string folder = Path.GetDirectoryName(path);
-                return File.Exists(folder + "/LeagueClient.exe") && Directory.Exists(folder + "/Config") && Directory.Exists(folder + "/Logs");
+                return File.Exists(folder + "\\LeagueClient.exe") && Directory.Exists(folder + "\\Config") && Directory.Exists(folder + "\\Logs");
             }
             catch
             {
