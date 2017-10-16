@@ -1,4 +1,5 @@
 ﻿using System.Drawing;
+using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
@@ -11,7 +12,8 @@ namespace Deceive
     {
         private NotifyIcon trayIcon;
         private bool enabled = true;
-        private string status = "offline";
+        private string status;
+        private string statusFile = Path.Combine(Utils.DATA_DIR, "status");
 
         private SslStream incoming;
         private SslStream outgoing;
@@ -27,6 +29,7 @@ namespace Deceive
                 BalloonTipText = "Deceive is currently masking your status. Right-Click the tray icon for more options."
             };
             trayIcon.ShowBalloonTip(5000);
+            LoadStatus();
             SetupMenuItems();
         }
 
@@ -72,6 +75,7 @@ namespace Deceive
                 if (result != DialogResult.Yes) return;
 
                 Utils.KillLCU();
+                SaveStatus();
                 Application.Exit();
             });
 
@@ -113,6 +117,7 @@ namespace Deceive
             finally
             {
                 System.Console.WriteLine("Incoming closed.");
+                SaveStatus();
                 Application.Exit();
             }
         }
@@ -135,6 +140,7 @@ namespace Deceive
             catch
             {
                 System.Console.WriteLine("Outgoing errored.");
+                SaveStatus();
                 Application.Exit();
             }
         }
@@ -179,6 +185,17 @@ namespace Deceive
             if (string.IsNullOrEmpty(this.lastPresence)) return;
 
             this.PossiblyRewriteAndResendPresence(this.lastPresence, status);
+        }
+
+        private void LoadStatus()
+        {
+            if (File.Exists(statusFile)) status = File.ReadAllText(statusFile) == "mobile" ? "mobile" : "offline";
+            else status = "offline";
+        }
+
+        private void SaveStatus()
+        {
+            File.WriteAllText(statusFile, status);
         }
     }
 }
