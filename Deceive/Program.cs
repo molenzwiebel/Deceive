@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -25,11 +26,34 @@ namespace Deceive
             ["OC1"] = new Tuple<string, int>("chat.oc1.lol.riotgames.com", 5223),
             ["RU"] = new Tuple<string, int>("chat.ru.lol.riotgames.com", 5223),
             ["TEST"] = new Tuple<string, int>("chat.na2.lol.riotgames.com", 5223),
-            ["TR"] = new Tuple<string, int>("chat.tr.lol.riotgames.com", 5223)
+            ["TR"] = new Tuple<string, int>("chat.tr.lol.riotgames.com", 5223),
+            ["PBE"] = new Tuple<string, int>("chat.pbe1.lol.riotgames.com", 5223)
         };
 
         [STAThread]
         public static void Main(string[] args)
+        {
+            try
+            {
+                StartDeceive();
+            }
+            catch (Exception ex)
+            {
+                // Show some kind of message so that Deceive doesn't just disappear.
+                MessageBox.Show(
+                    "Deceive encountered an error and couldn't properly initialize itself. Please contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord.\n\n" + ex,
+                    "Deceive",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button1
+                );
+            }
+        }
+
+        /**
+         * Actual main function. Wrapped into a separate function so we can catch exceptions.
+         */
+        private static void StartDeceive()
         {
             // We are supposed to launch league, so if it's already running something is going wrong.
             if (Utils.IsLCURunning())
@@ -52,18 +76,23 @@ namespace Deceive
             var port = ((IPEndPoint) listener.LocalEndpoint).Port;
 
             // Step 2: Find original system.yaml, patch our localhost proxy in, and save it somewhere.
+            var leaguePath = Utils.GetLCUPath();
             var contents = File.ReadAllText(Utils.GetSystemYamlPath());
             contents = contents.Replace("allow_self_signed_cert: false", "allow_self_signed_cert: true");
             contents = contents.Replace("chat_port: 5223", "chat_port: " + port);
             contents = new Regex("chat_host: .*?\t?\n").Replace(contents, "chat_host: localhost\n");
 
-            var yamlPath = Path.Combine(Utils.DATA_DIR, "system.yaml");
+            // Write this to the league install folder and not the appdata folder.
+            // This is because league segfaults if you give it an override path with unicode characters,
+            // such as some users with a special character in their Windows user name may have.
+            // We put it in the Config folder since the new patcher will nuke any non-league files in the install root.
+            var yamlPath = Path.Combine(Path.GetDirectoryName(leaguePath), "Config", "deceive-system.yaml");
             File.WriteAllText(yamlPath, contents);
 
             // Step 3: Start league and wait for a connect.
             var startArgs = new ProcessStartInfo
             {
-                FileName = Utils.GetLCUPath(),
+                FileName = leaguePath,
                 Arguments = "--system-yaml-override=\"" + yamlPath + "\"",
                 UseShellExecute = false
             };

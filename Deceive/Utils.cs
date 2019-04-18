@@ -43,6 +43,15 @@ namespace Deceive
         {
             var league = GetLCUPath();
             var releases = Path.GetDirectoryName(league) + "/RADS/projects/league_client/releases";
+
+            // Old patcher has the system.yaml in RADS/projects/league_client/releases/<version>/deploy
+            // New patcher has it in the install root.
+            // If releases doesn't exist, we assume it is something in the root.
+            if (!Directory.Exists(releases))
+            {
+                return Path.Combine(Path.GetDirectoryName(league), "system.yaml");
+            }
+
             var last = Directory.GetDirectories(releases).Select(x => {
                 try
                 {
