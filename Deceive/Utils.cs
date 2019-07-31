@@ -64,7 +64,16 @@ namespace Deceive
                     return new { Path = x, Version = -1 };
                 }
             }).OrderBy(x => x.Version).Last().Path;
-            return last + "/deploy/system.yaml";
+
+            // Some times the patcher leaves the folders empty, without removing the actual folders.
+            // As an extra sanity check, check if the file exists and default back to the root system yaml.
+            var fullPath = last + "/deploy/system.yaml";
+            if (!File.Exists(fullPath))
+            {
+                return Path.Combine(Path.GetDirectoryName(league), "system.yaml");
+            }
+
+            return fullPath;
         }
 
         /**

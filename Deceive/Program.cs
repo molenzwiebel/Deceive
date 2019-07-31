@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Data;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -9,27 +7,12 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using YamlDotNet.RepresentationModel;
 
 namespace Deceive
 {
     class MainClass
     {
-        private static readonly Dictionary<string, Tuple<string, int>> REGIONS = new Dictionary<string, Tuple<string, int>>
-        {
-            ["BR"] = new Tuple<string, int>("chat.br.lol.riotgames.com", 5223),
-            ["EUNE"] = new Tuple<string, int>("chat.eun1.lol.riotgames.com", 5223),
-            ["EUW"] = new Tuple<string, int>("chat.euw1.lol.riotgames.com", 5223),
-            ["JP"] = new Tuple<string, int>("chat.jp1.lol.riotgames.com", 5223),
-            ["LA1"] = new Tuple<string, int>("chat.la1.lol.riotgames.com", 5223),
-            ["LA2"] = new Tuple<string, int>("chat.la2.lol.riotgames.com", 5223),
-            ["NA"] = new Tuple<string, int>("chat.na2.lol.riotgames.com", 5223),
-            ["OC1"] = new Tuple<string, int>("chat.oc1.lol.riotgames.com", 5223),
-            ["RU"] = new Tuple<string, int>("chat.ru.lol.riotgames.com", 5223),
-            ["TEST"] = new Tuple<string, int>("chat.na2.lol.riotgames.com", 5223),
-            ["TR"] = new Tuple<string, int>("chat.tr.lol.riotgames.com", 5223),
-            ["PBE"] = new Tuple<string, int>("chat.pbe1.lol.riotgames.com", 5223)
-        };
-
         [STAThread]
         public static void Main(string[] args)
         {
@@ -76,8 +59,14 @@ namespace Deceive
             var port = ((IPEndPoint) listener.LocalEndpoint).Port;
 
             // Step 2: Find original system.yaml, patch our localhost proxy in, and save it somewhere.
+            // At the same time, also parse the system.yaml to get the original chat server locations.
             var leaguePath = Utils.GetLCUPath();
             var contents = File.ReadAllText(Utils.GetSystemYamlPath());
+
+            // Load the stream
+            var yaml = new YamlStream();
+            yaml.Load(new StringReader(contents));
+
             contents = contents.Replace("allow_self_signed_cert: false", "allow_self_signed_cert: true");
             contents = contents.Replace("chat_port: 5223", "chat_port: " + port);
             contents = new Regex("chat_host: .*?\t?\n").Replace(contents, "chat_host: localhost\n");
@@ -104,10 +93,14 @@ namespace Deceive
             var cert = new X509Certificate2(Properties.Resources.certificates);
             sslIncoming.AuthenticateAsServer(cert);
 
-            var regionDetails = REGIONS[Utils.GetLCURegion()];
-            var outgoing = new TcpClient(regionDetails.Item1, regionDetails.Item2);
+            // Find the chat information of the original system.yaml for that region.
+            var regionDetails = yaml.Documents[0].RootNode["region_data"][Utils.GetLCURegion()]["servers"]["chat"];
+            var chatHost = regionDetails["chat_host"].ToString();
+            var chatPort = int.Parse(regionDetails["chat_port"].ToString());
+
+            var outgoing = new TcpClient(chatHost, chatPort);
             var sslOutgoing = new SslStream(outgoing.GetStream());
-            sslOutgoing.AuthenticateAsClient(regionDetails.Item1);
+            sslOutgoing.AuthenticateAsClient(chatHost);
 
             // Step 5: All sockets are now connected, start tray icon.
             var mainController = new MainController();
