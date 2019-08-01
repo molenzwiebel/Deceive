@@ -83,14 +83,23 @@ namespace Deceive
         {
             string path;
             string configPath = Path.Combine(DATA_DIR, "lcuPath");
+            string initialDirectory = "C:\\Riot Games\\League of Legends";
 
-            if (File.Exists(configPath))
-                path = File.ReadAllText(configPath);
+            if (File.Exists(CONFIG_PATH))
+                path = File.ReadAllText(CONFIG_PATH);
             else
             {
-                path = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "").ToString();
-                // Remove "RADS" from the string's end
-                path = path.Remove(path.Length - 4) + "LeagueClient.exe";
+                object registry = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "");
+                if (registry == null)
+                {
+                    path = initialDirectory;
+                }
+                else
+                {
+                    path = registry.ToString();
+                    // Remove "RADS" from the string's end
+                    path = path.Remove(path.Length - 4) + "LeagueClient.exe";
+                }
             }
 
             while (!IsValidLCUPath(path))
@@ -106,7 +115,7 @@ namespace Deceive
                 // Ask for new path.
                 CommonOpenFileDialog dialog = new CommonOpenFileDialog();
                 dialog.Title = "Select LeagueClient.exe location.";
-                dialog.InitialDirectory = "C:\\Riot Games\\League of Legends";
+                dialog.InitialDirectory = initialDirectory;
                 dialog.EnsureFileExists = true;
                 dialog.EnsurePathExists = true;
                 dialog.DefaultFileName = "LeagueClient";
