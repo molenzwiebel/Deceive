@@ -35,7 +35,7 @@ namespace Deceive
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem("Deceive v1.3.0");
+            var aboutMenuItem = new MenuItem("Deceive v1.3.1");
             aboutMenuItem.Enabled = false;
 
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
