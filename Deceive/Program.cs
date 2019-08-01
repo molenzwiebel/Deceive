@@ -41,6 +41,8 @@ namespace Deceive
             // We are supposed to launch league, so if it's already running something is going wrong.
             if (Utils.IsLCURunning())
             {
+                Utils.InitPathWithRunningLCU();
+
                 var result = MessageBox.Show(
                     "League is currently running. In order to mask your online status, League needs to be started by Deceive. Do you want Deceive to stop League, so that it can restart it with the proper configuration?",
                     "Deceive",
@@ -60,8 +62,11 @@ namespace Deceive
 
             // Step 2: Find original system.yaml, patch our localhost proxy in, and save it somewhere.
             // At the same time, also parse the system.yaml to get the original chat server locations.
-            var leaguePath = Utils.GetLCUPath();
-            var contents = File.ReadAllText(Utils.GetSystemYamlPath());
+            var sysYamlPath = Utils.GetSystemYamlPath();
+            if (sysYamlPath == null) // If this is null, it means we canceled something that required manual user input. Just exit.
+                return;
+
+            var contents = File.ReadAllText(sysYamlPath);
 
             // Load the stream
             var yaml = new YamlStream();
@@ -75,6 +80,7 @@ namespace Deceive
             // This is because league segfaults if you give it an override path with unicode characters,
             // such as some users with a special character in their Windows user name may have.
             // We put it in the Config folder since the new patcher will nuke any non-league files in the install root.
+            var leaguePath = Utils.GetLCUPath();
             var yamlPath = Path.Combine(Path.GetDirectoryName(leaguePath), "Config", "deceive-system.yaml");
             File.WriteAllText(yamlPath, contents);
 
