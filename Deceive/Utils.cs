@@ -1,5 +1,6 @@
 ﻿using Microsoft.Win32;
 using Microsoft.WindowsAPICodePack.Dialogs;
+using System.Management;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -12,6 +13,9 @@ namespace Deceive
     class Utils
     {
         public static readonly string DATA_DIR = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
+        private static Regex AUTH_TOKEN_REGEX = new Regex("\"--remoting-auth-token=(.+?)\"");
+        private static Regex PORT_REGEX = new Regex("\"--app-port=(\\d+?)\"");
+        private static string CONFIG_PATH = Path.Combine(DATA_DIR, "lcuPath");
 
         static Utils()
         {
@@ -43,6 +47,9 @@ namespace Deceive
         public static string GetSystemYamlPath()
         {
             var league = GetLCUPath();
+            if (league == null)
+                return null;
+
             var releases = Path.GetDirectoryName(league) + "/RADS/projects/league_client/releases";
 
             // Old patcher has the system.yaml in RADS/projects/league_client/releases/<version>/deploy
@@ -82,15 +89,23 @@ namespace Deceive
         public static string GetLCUPath()
         {
             string path;
-            string configPath = Path.Combine(DATA_DIR, "lcuPath");
+            string initialDirectory = "C:\\Riot Games\\League of Legends";
 
-            if (File.Exists(configPath))
-                path = File.ReadAllText(configPath);
+            if (File.Exists(CONFIG_PATH))
+                path = File.ReadAllText(CONFIG_PATH);
             else
             {
-                path = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "").ToString();
-                // Remove "RADS" from the string's end
-                path = path.Remove(path.Length - 4) + "LeagueClient.exe";
+                object registry = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "");
+                if (registry == null)
+                {
+                    path = initialDirectory;
+                }
+                else
+                {
+                    path = registry.ToString();
+                    // Remove "RADS" from the string's end
+                    path = path.Remove(path.Length - 4) + "LeagueClient.exe";
+                }
             }
 
             while (!IsValidLCUPath(path))
@@ -106,7 +121,7 @@ namespace Deceive
                 // Ask for new path.
                 CommonOpenFileDialog dialog = new CommonOpenFileDialog();
                 dialog.Title = "Select LeagueClient.exe location.";
-                dialog.InitialDirectory = "C:\\Riot Games\\League of Legends";
+                dialog.InitialDirectory = initialDirectory;
                 dialog.EnsureFileExists = true;
                 dialog.EnsurePathExists = true;
                 dialog.DefaultFileName = "LeagueClient";
@@ -123,7 +138,7 @@ namespace Deceive
             }
 
             // Store choice so we don't have to ask for it again.
-            File.WriteAllText(configPath, path);
+            File.WriteAllText(CONFIG_PATH, path);
 
             return path;
         }
@@ -147,22 +162,37 @@ namespace Deceive
             }
         }
 
-        // Checks if there is a running LCU instance.
-        public static bool IsLCURunning()
+        private static Process[] GetLeagueProcesses()
         {
             Process[] lcuCandidates = Process.GetProcessesByName("LeagueClient");
             lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
             lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
+            return lcuCandidates;
+        }
 
-            return lcuCandidates.Length > 0;
+        public static void InitPathWithRunningLCU()
+        {
+            // Find the LeagueClientUx process.
+            foreach (var p in GetLeagueProcesses())
+            {
+                if (!IsValidLCUPath(p.MainModule.FileName))
+                    continue;
+
+                File.WriteAllText(CONFIG_PATH, p.MainModule.FileName);
+                return;
+            }
+        }
+
+        // Checks if there is a running LCU instance.
+        public static bool IsLCURunning()
+        {
+            return GetLeagueProcesses().Length > 0;
         }
 
         // Kills the running LCU instance, if applicable.
         public static void KillLCU()
         {
-            Process[] lcuCandidates = Process.GetProcessesByName("LeagueClient");
-            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
-            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
+            Process[] lcuCandidates = GetLeagueProcesses();
 
             foreach (Process lcu in lcuCandidates)
             {
