@@ -84,17 +84,31 @@ namespace Deceive
             var yamlPath = Path.Combine(Path.GetDirectoryName(leaguePath), "Config", "deceive-system.yaml");
             File.WriteAllText(yamlPath, contents);
 
-            // Step 3: Start league and wait for a connect.
-            var startArgs = new ProcessStartInfo
+            // Step 3: Either launch Riot Client or launch League, depending on local configuration.
+            var riotClientPath = Utils.GetRiotClientPath();
+
+            ProcessStartInfo startArgs;
+            if (riotClientPath != null)
             {
-                FileName = leaguePath,
-                Arguments = "--system-yaml-override=\"" + yamlPath + "\"",
-                UseShellExecute = false
-            };
+                startArgs = new ProcessStartInfo
+                {
+                    FileName = riotClientPath,
+                    Arguments = "--priority-launch-pid=12345 --priority-launch-path=\"" + leaguePath + "\" -- --system-yaml-override=\"" + yamlPath + "\"",
+                };
+            } else
+            {
+                startArgs = new ProcessStartInfo
+                {
+                    FileName = leaguePath,
+                    Arguments = "--system-yaml-override=\"" + yamlPath + "\"",
+                };
+            }
+
+            // Step 4: Start the process and wait for a connect.
             Process.Start(startArgs);
             var incoming = listener.AcceptTcpClient();
 
-            // Step 4: Connect sockets.
+            // Step 5: Connect sockets.
             var sslIncoming = new SslStream(incoming.GetStream());
             var cert = new X509Certificate2(Properties.Resources.certificates);
             sslIncoming.AuthenticateAsServer(cert);
@@ -108,7 +122,7 @@ namespace Deceive
             var sslOutgoing = new SslStream(outgoing.GetStream());
             sslOutgoing.AuthenticateAsClient(chatHost);
 
-            // Step 5: All sockets are now connected, start tray icon.
+            // Step 6: All sockets are now connected, start tray icon.
             var mainController = new MainController();
             mainController.StartThreads(sslIncoming, sslOutgoing);
             Application.EnableVisualStyles();

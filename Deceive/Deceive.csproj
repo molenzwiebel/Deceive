@@ -74,6 +74,7 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
+    <Compile Include="SimpleJson.cs" />
     <Compile Include="Utils.cs" />
   </ItemGroup>
   <ItemGroup>

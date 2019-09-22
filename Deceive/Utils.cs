@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using System.Collections.Generic;
 
 namespace Deceive
 {
@@ -186,15 +187,16 @@ namespace Deceive
         // Checks if there is a running LCU instance.
         public static bool IsLCURunning()
         {
-            return GetLeagueProcesses().Length > 0;
+            return GetLeagueProcesses().Length > 0 || Process.GetProcessesByName("RiotClientServices").Length > 0;
         }
 
         // Kills the running LCU instance, if applicable.
         public static void KillLCU()
         {
-            Process[] lcuCandidates = GetLeagueProcesses();
+            IEnumerable<Process> candidates = GetLeagueProcesses();
+            candidates = candidates.Concat(Process.GetProcessesByName("RiotClientServices"));
 
-            foreach (Process lcu in lcuCandidates)
+            foreach (Process lcu in candidates)
             {
                 lcu.Refresh();
                 if (!lcu.HasExited)
@@ -203,6 +205,36 @@ namespace Deceive
                     lcu.WaitForExit();
                 }
             }
+        }
+
+        // Checks if the current client has a Riot Client configuration,
+        // and returns the path of the client if it does. Else, returns null.
+        public static string GetRiotClientPath()
+        {
+            // Find the RiotClientInstalls file.
+            var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Riot Games/RiotClientInstalls.json");
+            if (!File.Exists(installPath)) return null;
+
+            // Ensure it has a list of installed clients.
+            JsonObject data = (JsonObject) SimpleJson.DeserializeObject(File.ReadAllText(installPath));
+            if (data["associated_client"] == null || !(data["associated_client"] is JsonObject)) return null;
+
+            // Find the directory of the client we're attempting to launch.
+            var baseDir = Path.GetDirectoryName(GetLCUPath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+            // For every entry, see if it matches after normalization.
+            // We need to normalize since the client is inconsistent with direction of slashes and trailing slashes.
+            foreach (var entry in (JsonObject) data["associated_client"])
+            {
+                var normalizedPath = Path.GetFullPath(entry.Key).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+                if (normalizedPath == baseDir)
+                {
+                    return (string)entry.Value;
+                }
+            }
+
+            return "";
         }
     }
 }
