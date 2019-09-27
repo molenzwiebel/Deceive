@@ -98,15 +98,19 @@ namespace Deceive
             else
             {
                 object registry = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "");
-                if (registry == null)
+                object registryNew = Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends", "Location", "");
+                if (registry == null && registryNew == null)
                 {
-                    path = initialDirectory;
+                    path = initialDirectory + "\\LeagueClient.exe";
                 }
-                else
+                else if (registryNew == null)
                 {
                     path = registry.ToString();
                     // Remove "RADS" from the string's end
                     path = path.Remove(path.Length - 4) + "LeagueClient.exe";
+                } else
+                {
+                    path = registryNew.ToString() + "\\LeagueClient.exe";
                 }
             }
 
