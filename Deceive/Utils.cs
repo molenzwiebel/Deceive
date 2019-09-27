@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Deceive
 {
@@ -176,8 +177,38 @@ namespace Deceive
             // Find the LeagueClientUx process.
             foreach (var p in GetLeagueProcesses())
             {
-                if (!IsValidLCUPath(p.MainModule.FileName))
-                    continue;
+                try
+                {
+                    if (!IsValidLCUPath(p.MainModule.FileName))
+                        continue;
+                } 
+                catch 
+                {
+                    var result = MessageBox.Show(
+                        "League is currently running in admin mode. In order to proceed Deceive also needs to be elevated. Do you want Deceive to restart in admin mode?",
+                        "Deceive",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question,
+                        MessageBoxDefaultButton.Button1
+                    );
+
+                    if (result == DialogResult.Yes)
+                    {
+                        var currentProcessInfo = new ProcessStartInfo
+                        {
+                            UseShellExecute = true,
+                            WorkingDirectory = Environment.CurrentDirectory,
+                            FileName = Assembly.GetEntryAssembly().Location,
+                            Verb = "runas"
+                        };
+
+                        Process.Start(currentProcessInfo);
+                        Environment.Exit(0);
+                    } else
+                    {
+                        Environment.Exit(0);
+                    }
+                }
 
                 File.WriteAllText(CONFIG_PATH, p.MainModule.FileName);
                 return;
