@@ -263,13 +263,13 @@ namespace Deceive
             {
                 var normalizedPath = Path.GetFullPath(entry.Key).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-                if (normalizedPath == baseDir)
+                if (normalizedPath == baseDir && ((string)entry.Value).Contains("RiotClientServices.exe"))
                 {
                     return (string)entry.Value;
                 }
             }
 
-            return "";
+            return null;
         }
     }
 }
