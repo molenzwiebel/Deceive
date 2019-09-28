@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Reflection;
 
 namespace Deceive
 {
@@ -97,15 +98,19 @@ namespace Deceive
             else
             {
                 object registry = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "");
-                if (registry == null)
+                object registryNew = Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends", "Location", "");
+                if (registry == null && registryNew == null)
                 {
-                    path = initialDirectory;
+                    path = initialDirectory + "\\LeagueClient.exe";
                 }
-                else
+                else if (registryNew == null)
                 {
                     path = registry.ToString();
                     // Remove "RADS" from the string's end
                     path = path.Remove(path.Length - 4) + "LeagueClient.exe";
+                } else
+                {
+                    path = registryNew.ToString() + "\\LeagueClient.exe";
                 }
             }
 
@@ -176,8 +181,38 @@ namespace Deceive
             // Find the LeagueClientUx process.
             foreach (var p in GetLeagueProcesses())
             {
-                if (!IsValidLCUPath(p.MainModule.FileName))
-                    continue;
+                try
+                {
+                    if (!IsValidLCUPath(p.MainModule.FileName))
+                        continue;
+                } 
+                catch 
+                {
+                    var result = MessageBox.Show(
+                        "League is currently running in admin mode. In order to proceed Deceive also needs to be elevated. Do you want Deceive to restart in admin mode?",
+                        "Deceive",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question,
+                        MessageBoxDefaultButton.Button1
+                    );
+
+                    if (result == DialogResult.Yes)
+                    {
+                        var currentProcessInfo = new ProcessStartInfo
+                        {
+                            UseShellExecute = true,
+                            WorkingDirectory = Environment.CurrentDirectory,
+                            FileName = Assembly.GetEntryAssembly().Location,
+                            Verb = "runas"
+                        };
+
+                        Process.Start(currentProcessInfo);
+                        Environment.Exit(0);
+                    } else
+                    {
+                        Environment.Exit(0);
+                    }
+                }
 
                 File.WriteAllText(CONFIG_PATH, p.MainModule.FileName);
                 return;
@@ -228,13 +263,13 @@ namespace Deceive
             {
                 var normalizedPath = Path.GetFullPath(entry.Key).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
-                if (normalizedPath == baseDir)
+                if (normalizedPath == baseDir && ((string)entry.Value).Contains("RiotClientServices.exe"))
                 {
                     return (string)entry.Value;
                 }
             }
 
-            return "";
+            return null;
         }
     }
 }
