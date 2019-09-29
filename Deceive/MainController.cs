@@ -1,11 +1,10 @@
-﻿using System;
-using System.IO;
+﻿using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
-using Timer = System.Windows.Forms.Timer;
 
 namespace Deceive
 {
@@ -19,7 +18,6 @@ namespace Deceive
         private SslStream incoming;
         private SslStream outgoing;
         private string lastPresence; // we resend this if the state changes
-        private readonly Timer initLCUStatusTimer = new Timer();
 
         public MainController()
         {
@@ -33,51 +31,60 @@ namespace Deceive
             trayIcon.ShowBalloonTip(5000);
             LoadStatus();
             SetupMenuItems();
-
-            //Update status when LCU launches
-            //Try every 5 seconds until LCU is ready to accept our status
-            initLCUStatusTimer.Tick += new EventHandler(InitLCUStatus);
-            initLCUStatusTimer.Interval = 5000;
-            initLCUStatusTimer.Start();
+            InitLCUStatus();
         }
 
-        private void InitLCUStatus(object sender, EventArgs e)
+        private async void InitLCUStatus()
         {
-            try
+            while (true)
             {
-                Utils.SendStatusToLCU(status);
-                //stop Timer when changing LCU status finally worked and we get no WebException
-                initLCUStatusTimer.Dispose();
+                try
+                {
+                    Utils.SendStatusToLCU(status);
+                    return;
+                }
+                catch
+                {
+                    // LCU is not ready yet. Wait for a bit.
+                    await Task.Delay(5000);
+                }
             }
-            catch { /* LCU is not ready yet. */ }
         }
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem("Deceive v1.5.0");
-            aboutMenuItem.Enabled = false;
+            var aboutMenuItem = new MenuItem("Deceive v1.5.0")
+            {
+                Enabled = false
+            };
 
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
             {
                 enabled = !enabled;
                 UpdateStatus(enabled ? status : "chat");
                 SetupMenuItems();
-            });
-            enabledMenuItem.Checked = enabled;
+            })
+            {
+                Checked = enabled
+            };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
                 UpdateStatus(status = "offline");
                 SetupMenuItems();
-            });
-            offlineStatus.Checked = status.Equals("offline");
+            })
+            {
+                Checked = status.Equals("offline")
+            };
 
             var mobileStatus = new MenuItem("Mobile", (a, e) =>
             {
                 UpdateStatus(status = "mobile");
                 SetupMenuItems();
-            });
-            mobileStatus.Checked = status.Equals("mobile");
+            })
+            {
+                Checked = status.Equals("mobile")
+            };
 
             var typeMenuItem = new MenuItem("Status Type", new MenuItem[] { offlineStatus, mobileStatus });
 

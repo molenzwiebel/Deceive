@@ -58,7 +58,7 @@ namespace Deceive
             // Step 1: Open a port for our proxy, so we can patch the port number into the system yaml.
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
-            var port = ((IPEndPoint) listener.LocalEndpoint).Port;
+            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
 
             // Step 2: Find original system.yaml, patch our localhost proxy in, and save it somewhere.
             // At the same time, also parse the system.yaml to get the original chat server locations.
@@ -95,7 +95,8 @@ namespace Deceive
                     FileName = riotClientPath,
                     Arguments = "--priority-launch-pid=12345 --priority-launch-path=\"" + leaguePath + "\" -- --system-yaml-override=\"" + yamlPath + "\"",
                 };
-            } else
+            }
+            else
             {
                 startArgs = new ProcessStartInfo
                 {
