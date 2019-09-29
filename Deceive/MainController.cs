@@ -60,7 +60,7 @@ namespace Deceive
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
             {
                 enabled = !enabled;
-                UpdateStatus(enabled ? status : "online");
+                UpdateStatus(enabled ? status : "chat");
                 SetupMenuItems();
             });
             enabledMenuItem.Checked = enabled;
