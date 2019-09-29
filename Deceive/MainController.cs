@@ -1,23 +1,25 @@
-﻿using System.Drawing;
+﻿using System;
 using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 using System.Xml;
+using Timer = System.Windows.Forms.Timer;
 
 namespace Deceive
 {
     public class MainController : ApplicationContext
     {
-        private NotifyIcon trayIcon;
+        private readonly NotifyIcon trayIcon;
         private bool enabled = true;
         private string status;
-        private string statusFile = Path.Combine(Utils.DATA_DIR, "status");
+        private readonly string statusFile = Path.Combine(Utils.DATA_DIR, "status");
 
         private SslStream incoming;
         private SslStream outgoing;
         private string lastPresence; // we resend this if the state changes
+        private readonly Timer initLCUStatusTimer = new Timer();
 
         public MainController()
         {
@@ -31,11 +33,28 @@ namespace Deceive
             trayIcon.ShowBalloonTip(5000);
             LoadStatus();
             SetupMenuItems();
+
+            //Update status when LCU launches
+            //Try every 5 seconds until LCU is ready to accept our status
+            initLCUStatusTimer.Tick += new EventHandler(InitLCUStatus);
+            initLCUStatusTimer.Interval = 5000;
+            initLCUStatusTimer.Start();
+        }
+
+        private void InitLCUStatus(object sender, EventArgs e)
+        {
+            try
+            {
+                Utils.SendStatusToLCU(status);
+                //stop Timer when changing LCU status finally worked and we get no WebException
+                initLCUStatusTimer.Dispose();
+            }
+            catch { /* LCU is not ready yet. */ }
         }
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem("Deceive v1.4.1");
+            var aboutMenuItem = new MenuItem("Deceive v1.5.0");
             aboutMenuItem.Enabled = false;
 
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
@@ -185,6 +204,7 @@ namespace Deceive
             if (string.IsNullOrEmpty(this.lastPresence)) return;
 
             this.PossiblyRewriteAndResendPresence(this.lastPresence, status);
+            Utils.SendStatusToLCU(status);
         }
 
         private void LoadStatus()
