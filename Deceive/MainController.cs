@@ -192,6 +192,7 @@ namespace Deceive
                         status.LoadXml(presence["status"].InnerText);
                         status["body"]["statusMsg"].InnerText = "";
                         status["body"]["gameStatus"].InnerText = "outOfGame";
+                        if (status["body"].InnerXml.Contains("pty")) status["body"].RemoveChild(status["body"]["pty"]);
 
                         presence["status"].InnerText = status.OuterXml;
                     }
