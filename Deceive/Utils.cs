@@ -1,23 +1,25 @@
 ﻿using Microsoft.Win32;
 using Microsoft.WindowsAPICodePack.Dialogs;
-using System.Management;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Management;
+using System.Net;
+using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
-using System.Collections.Generic;
-using System.Reflection;
 
 namespace Deceive
 {
     class Utils
     {
         public static readonly string DATA_DIR = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
-        private static Regex AUTH_TOKEN_REGEX = new Regex("\"--remoting-auth-token=(.+?)\"");
-        private static Regex PORT_REGEX = new Regex("\"--app-port=(\\d+?)\"");
-        private static string CONFIG_PATH = Path.Combine(DATA_DIR, "lcuPath");
+        private static readonly Regex AUTH_TOKEN_REGEX = new Regex("\"--remoting-auth-token=(.+?)\"");
+        private static readonly Regex PORT_REGEX = new Regex("\"--app-port=(\\d+?)\"");
+        private static readonly string CONFIG_PATH = Path.Combine(DATA_DIR, "lcuPath");
 
         static Utils()
         {
@@ -44,7 +46,7 @@ namespace Deceive
         }
 
         /**
-         * Gets the path to the most recent system.yaml file in the current league installation.
+         * Gets the path to the system.yaml file in the current league installation.
          */
         public static string GetSystemYamlPath()
         {
@@ -52,37 +54,8 @@ namespace Deceive
             if (league == null)
                 return null;
 
-            var releases = Path.GetDirectoryName(league) + "/RADS/projects/league_client/releases";
-
-            // Old patcher has the system.yaml in RADS/projects/league_client/releases/<version>/deploy
             // New patcher has it in the install root.
-            // If releases doesn't exist, we assume it is something in the root.
-            if (!Directory.Exists(releases))
-            {
-                return Path.Combine(Path.GetDirectoryName(league), "system.yaml");
-            }
-
-            var last = Directory.GetDirectories(releases).Select(x => {
-                try
-                {
-                    // Convert 0.0.0.29 to 29.
-                    return new { Path = x, Version = int.Parse(Path.GetFileName(x).Replace(".", "")) };
-                }
-                catch
-                {
-                    return new { Path = x, Version = -1 };
-                }
-            }).OrderBy(x => x.Version).Last().Path;
-
-            // Some times the patcher leaves the folders empty, without removing the actual folders.
-            // As an extra sanity check, check if the file exists and default back to the root system yaml.
-            var fullPath = last + "/deploy/system.yaml";
-            if (!File.Exists(fullPath))
-            {
-                return Path.Combine(Path.GetDirectoryName(league), "system.yaml");
-            }
-
-            return fullPath;
+            return Path.Combine(Path.GetDirectoryName(league), "system.yaml");
         }
 
         /**
@@ -97,20 +70,14 @@ namespace Deceive
                 path = File.ReadAllText(CONFIG_PATH);
             else
             {
-                object registry = Registry.GetValue("HKEY_CURRENT_USER\\Software\\Riot Games\\RADS", "LocalRootFolder", "");
-                object registryNew = Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends", "Location", "");
-                if (registry == null && registryNew == null)
+                object registry = Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends", "Location", "");
+                if (registry == null)
                 {
                     path = initialDirectory + "\\LeagueClient.exe";
                 }
-                else if (registryNew == null)
+                else
                 {
-                    path = registry.ToString();
-                    // Remove "RADS" from the string's end
-                    path = path.Remove(path.Length - 4) + "LeagueClient.exe";
-                } else
-                {
-                    path = registryNew.ToString() + "\\LeagueClient.exe";
+                    path = registry.ToString() + "\\LeagueClient.exe";
                 }
             }
 
@@ -125,13 +92,15 @@ namespace Deceive
                 );
 
                 // Ask for new path.
-                CommonOpenFileDialog dialog = new CommonOpenFileDialog();
-                dialog.Title = "Select LeagueClient.exe location.";
-                dialog.InitialDirectory = initialDirectory;
-                dialog.EnsureFileExists = true;
-                dialog.EnsurePathExists = true;
-                dialog.DefaultFileName = "LeagueClient";
-                dialog.DefaultExtension = "exe";
+                CommonOpenFileDialog dialog = new CommonOpenFileDialog
+                {
+                    Title = "Select LeagueClient.exe location.",
+                    InitialDirectory = initialDirectory,
+                    EnsureFileExists = true,
+                    EnsurePathExists = true,
+                    DefaultFileName = "LeagueClient",
+                    DefaultExtension = "exe"
+                };
                 dialog.Filters.Add(new CommonFileDialogFilter("Executables", ".exe"));
                 dialog.Filters.Add(new CommonFileDialogFilter("All Files", ".*"));
                 if (dialog.ShowDialog() == CommonFileDialogResult.Cancel)
@@ -185,8 +154,8 @@ namespace Deceive
                 {
                     if (!IsValidLCUPath(p.MainModule.FileName))
                         continue;
-                } 
-                catch 
+                }
+                catch
                 {
                     var result = MessageBox.Show(
                         "League is currently running in admin mode. In order to proceed Deceive also needs to be elevated. Do you want Deceive to restart in admin mode?",
@@ -208,7 +177,8 @@ namespace Deceive
 
                         Process.Start(currentProcessInfo);
                         Environment.Exit(0);
-                    } else
+                    }
+                    else
                     {
                         Environment.Exit(0);
                     }
@@ -251,7 +221,7 @@ namespace Deceive
             if (!File.Exists(installPath)) return null;
 
             // Ensure it has a list of installed clients.
-            JsonObject data = (JsonObject) SimpleJson.DeserializeObject(File.ReadAllText(installPath));
+            JsonObject data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
             if (data["associated_client"] == null || !(data["associated_client"] is JsonObject)) return null;
 
             // Find the directory of the client we're attempting to launch.
@@ -259,7 +229,7 @@ namespace Deceive
 
             // For every entry, see if it matches after normalization.
             // We need to normalize since the client is inconsistent with direction of slashes and trailing slashes.
-            foreach (var entry in (JsonObject) data["associated_client"])
+            foreach (var entry in (JsonObject)data["associated_client"])
             {
                 var normalizedPath = Path.GetFullPath(entry.Key).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
@@ -268,8 +238,65 @@ namespace Deceive
                     return (string)entry.Value;
                 }
             }
-
             return null;
+        }
+
+        //Class for storing LCU API port and auth token
+        public class LCUAPIPortToken
+        {
+            public LCUAPIPortToken(string port, string token)
+            {
+                Port = port;
+                Token = token;
+            }
+
+            public string Port { get; }
+
+            public string Token { get; }
+        }
+
+        //Reads LCU API port and auth token from LCU command line
+        public static LCUAPIPortToken GetAPIPortAndToken(Process process)
+        {
+            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + process.Id))
+            using (ManagementObjectCollection objects = searcher.Get())
+            {
+                var commandLine = (string)objects.Cast<ManagementBaseObject>().SingleOrDefault()["CommandLine"];
+                try
+                {
+                    var port = PORT_REGEX.Match(commandLine).Groups[1].Value;
+                    var token = AUTH_TOKEN_REGEX.Match(commandLine).Groups[1].Value;
+                    return new LCUAPIPortToken(port, token);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            return null;
+        }
+
+        /*
+         * Sends our masked availability to LCU for display to local player instead of showing normal status.
+         * LCU will only display availability, so still shows 'Creating Normal Game' or 'In Game'.
+         * This happens only locally, since Deceive masks whole presence with 'gameStatus' as 'outOfGame'.
+         * If we passed this (whole presence) too LCU just overrides it.
+         */
+        public static void SendStatusToLCU(string status)
+        {
+            foreach (Process process in Process.GetProcessesByName("LeagueClientUx"))
+            {
+                var portToken = GetAPIPortAndToken(process);
+                if (portToken == null) return;
+                var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes("riot:" + portToken.Token));
+                ServicePointManager.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
+                using (var client = new WebClient())
+                {
+                    client.Headers.Add(HttpRequestHeader.Authorization, "Basic " + auth);
+                    string body = "{\"availability\": \"" + status + "\"}";
+                    client.UploadString(new Uri("https://127.0.0.1:" + portToken.Port + "/lol-chat/v1/me"), "PUT", body);
+                }
+            }
         }
     }
 }

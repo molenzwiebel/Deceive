@@ -1,8 +1,8 @@
-﻿using System.Drawing;
-using System.IO;
+﻿using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 
@@ -10,10 +10,10 @@ namespace Deceive
 {
     public class MainController : ApplicationContext
     {
-        private NotifyIcon trayIcon;
+        private readonly NotifyIcon trayIcon;
         private bool enabled = true;
         private string status;
-        private string statusFile = Path.Combine(Utils.DATA_DIR, "status");
+        private readonly string statusFile = Path.Combine(Utils.DATA_DIR, "status");
 
         private SslStream incoming;
         private SslStream outgoing;
@@ -31,34 +31,62 @@ namespace Deceive
             trayIcon.ShowBalloonTip(5000);
             LoadStatus();
             SetupMenuItems();
+            InitLCUStatus();
+        }
+
+        private async void InitLCUStatus()
+        {
+            while (true)
+            {
+                try
+                {
+                    Utils.SendStatusToLCU(status);
+                    return;
+                }
+                catch
+                {
+                    // LCU is not ready yet. Wait for a bit.
+                    await Task.Delay(3000);
+                }
+            }
         }
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem("Deceive v1.4.1");
-            aboutMenuItem.Enabled = false;
+            var aboutMenuItem = new MenuItem("Deceive v1.5.0")
+            {
+                Enabled = false
+            };
 
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
             {
                 enabled = !enabled;
-                UpdateStatus(enabled ? status : "online");
+                UpdateStatus(enabled ? status : "chat");
                 SetupMenuItems();
-            });
-            enabledMenuItem.Checked = enabled;
+            })
+            {
+                Checked = enabled
+            };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
                 UpdateStatus(status = "offline");
+                enabled = true;
                 SetupMenuItems();
-            });
-            offlineStatus.Checked = status.Equals("offline");
+            })
+            {
+                Checked = status.Equals("offline")
+            };
 
             var mobileStatus = new MenuItem("Mobile", (a, e) =>
             {
                 UpdateStatus(status = "mobile");
+                enabled = true;
                 SetupMenuItems();
-            });
-            mobileStatus.Checked = status.Equals("mobile");
+            })
+            {
+                Checked = status.Equals("mobile")
+            };
 
             var typeMenuItem = new MenuItem("Status Type", new MenuItem[] { offlineStatus, mobileStatus });
 
@@ -158,12 +186,13 @@ namespace Deceive
                     this.lastPresence = content;
                     presence["show"].InnerText = targetStatus;
 
-                    if (targetStatus != "online")
+                    if (targetStatus != "chat")
                     {
                         var status = new XmlDocument();
                         status.LoadXml(presence["status"].InnerText);
                         status["body"]["statusMsg"].InnerText = "";
                         status["body"]["gameStatus"].InnerText = "outOfGame";
+                        if (status["body"].InnerXml.Contains("pty")) status["body"].RemoveChild(status["body"]["pty"]);
 
                         presence["status"].InnerText = status.OuterXml;
                     }
@@ -185,6 +214,7 @@ namespace Deceive
             if (string.IsNullOrEmpty(this.lastPresence)) return;
 
             this.PossiblyRewriteAndResendPresence(this.lastPresence, status);
+            Utils.SendStatusToLCU(status);
         }
 
         private void LoadStatus()
