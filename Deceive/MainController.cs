@@ -186,7 +186,7 @@ namespace Deceive
                     this.lastPresence = content;
                     presence["show"].InnerText = targetStatus;
 
-                    if (targetStatus != "online")
+                    if (targetStatus != "chat")
                     {
                         var status = new XmlDocument();
                         status.LoadXml(presence["status"].InnerText);
