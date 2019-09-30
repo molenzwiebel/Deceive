@@ -46,7 +46,7 @@ namespace Deceive
                 catch
                 {
                     // LCU is not ready yet. Wait for a bit.
-                    await Task.Delay(5000);
+                    await Task.Delay(3000);
                 }
             }
         }
@@ -71,6 +71,7 @@ namespace Deceive
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
                 UpdateStatus(status = "offline");
+                enabled = true;
                 SetupMenuItems();
             })
             {
@@ -80,6 +81,7 @@ namespace Deceive
             var mobileStatus = new MenuItem("Mobile", (a, e) =>
             {
                 UpdateStatus(status = "mobile");
+                enabled = true;
                 SetupMenuItems();
             })
             {
