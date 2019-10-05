@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using Deceive.Properties;
 using YamlDotNet.RepresentationModel;
 
 namespace Deceive
@@ -25,7 +26,7 @@ namespace Deceive
                 // Show some kind of message so that Deceive doesn't just disappear.
                 MessageBox.Show(
                     "Deceive encountered an error and couldn't properly initialize itself. Please contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord.\n\n" + ex,
-                    "Deceive",
+                    Resources.DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error,
                     MessageBoxDefaultButton.Button1
@@ -45,7 +46,7 @@ namespace Deceive
 
                 var result = MessageBox.Show(
                     "League is currently running. In order to mask your online status, League needs to be started by Deceive. Do you want Deceive to stop League, so that it can restart it with the proper configuration?",
-                    "Deceive",
+                    Resources.DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button1
