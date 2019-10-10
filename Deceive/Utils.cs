@@ -11,6 +11,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using Deceive.Properties;
 
 namespace Deceive
 {
@@ -86,7 +87,7 @@ namespace Deceive
                 // Notify that the path is invalid.
                 MessageBox.Show(
                     "Could not find the League client at " + path + ". Please select the location of 'LeagueClient.exe' manually.",
-                    "LCU not found",
+                    Resources.DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Exclamation
                 );
@@ -159,7 +160,7 @@ namespace Deceive
                 {
                     var result = MessageBox.Show(
                         "League is currently running in admin mode. In order to proceed Deceive also needs to be elevated. Do you want Deceive to restart in admin mode?",
-                        "Deceive",
+                        Resources.DeceiveTitle,
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question,
                         MessageBoxDefaultButton.Button1
