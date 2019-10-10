@@ -88,7 +88,7 @@ namespace Deceive
             var riotClientPath = Utils.GetRiotClientPath();
 
             ProcessStartInfo startArgs;
-            if (riotClientPath != null)
+            if (riotClientPath != null && File.Exists(riotClientPath))
             {
                 startArgs = new ProcessStartInfo
                 {
