@@ -81,7 +81,7 @@ namespace Deceive.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Deceive v1.5.0.
+        ///   Looks up a localized string similar to Deceive v1.5.1.
         /// </summary>
         internal static string DeceiveTitle {
             get {

@@ -213,7 +213,7 @@ namespace Deceive
             }
         }
 
-        // Checks if the current client has a Riot Client configuration,
+        // Checks for any installed Riot Client configuration,
         // and returns the path of the client if it does. Else, returns null.
         public static string GetRiotClientPath()
         {
@@ -221,24 +221,17 @@ namespace Deceive
             var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Riot Games/RiotClientInstalls.json");
             if (!File.Exists(installPath)) return null;
 
-            // Ensure it has a list of installed clients.
             JsonObject data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
-            if (data["associated_client"] == null || !(data["associated_client"] is JsonObject)) return null;
+            String[] rcPaths = {};
+            if (data.ContainsKey("rc_default")) rcPaths.Append(data["rc_default"]);
+            if (data.ContainsKey("rc_live")) rcPaths.Append(data["rc_live"]);
+            if (data.ContainsKey("rc_beta")) rcPaths.Append(data["rc_beta"]);
 
-            // Find the directory of the client we're attempting to launch.
-            var baseDir = Path.GetDirectoryName(GetLCUPath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-            // For every entry, see if it matches after normalization.
-            // We need to normalize since the client is inconsistent with direction of slashes and trailing slashes.
-            foreach (var entry in (JsonObject)data["associated_client"])
+            foreach (var entry in rcPaths)
             {
-                var normalizedPath = Path.GetFullPath(entry.Key).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-
-                if (normalizedPath == baseDir && ((string)entry.Value).Contains("RiotClientServices.exe"))
-                {
-                    return (string)entry.Value;
-                }
+                if (File.Exists(entry)) return entry;
             }
+            
             return null;
         }
 
