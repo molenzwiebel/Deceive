@@ -125,6 +125,6 @@
     <value>..\Resources\deceive.ico;System.Drawing.Icon, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
   <data name="DeceiveTitle" xml:space="preserve">
-    <value>Deceive v1.5.0</value>
+    <value>Deceive v1.5.1</value>
   </data>
 </root>
