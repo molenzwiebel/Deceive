@@ -222,7 +222,7 @@ namespace Deceive
             if (!File.Exists(installPath)) return null;
 
             JsonObject data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
-            String[] rcPaths = {};
+            string[] rcPaths = {};
             if (data.ContainsKey("rc_default")) rcPaths.Append(data["rc_default"]);
             if (data.ContainsKey("rc_live")) rcPaths.Append(data["rc_live"]);
             if (data.ContainsKey("rc_beta")) rcPaths.Append(data["rc_beta"]);
