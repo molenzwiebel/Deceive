@@ -221,18 +221,14 @@ namespace Deceive
             var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Riot Games/RiotClientInstalls.json");
             if (!File.Exists(installPath)) return null;
 
-            JsonObject data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
-            string[] rcPaths = {};
-            if (data.ContainsKey("rc_default")) rcPaths.Append(data["rc_default"]);
-            if (data.ContainsKey("rc_live")) rcPaths.Append(data["rc_live"]);
-            if (data.ContainsKey("rc_beta")) rcPaths.Append(data["rc_beta"]);
-
-            foreach (var entry in rcPaths)
-            {
-                if (File.Exists(entry)) return entry;
-            }
+            var data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
+            var rcPaths = new List<string>();
             
-            return null;
+            if (data.ContainsKey("rc_default")) rcPaths.Add(data["rc_default"].ToString());
+            if (data.ContainsKey("rc_live")) rcPaths.Add(data["rc_live"].ToString());
+            if (data.ContainsKey("rc_beta")) rcPaths.Add(data["rc_beta"].ToString());
+
+            return rcPaths.FirstOrDefault(File.Exists);
         }
 
         //Class for storing LCU API port and auth token
