@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 using Deceive.Properties;
+using WebSocketSharp;
 
 namespace Deceive
 {
@@ -14,6 +15,7 @@ namespace Deceive
         private readonly NotifyIcon trayIcon;
         private bool enabled = true;
         private string status;
+        private WebSocket _ws;
         private readonly string statusFile = Path.Combine(Utils.DATA_DIR, "status");
 
         private SslStream incoming;
@@ -32,23 +34,19 @@ namespace Deceive
             trayIcon.ShowBalloonTip(5000);
             LoadStatus();
             SetupMenuItems();
-            InitLCUStatus();
+            InitLcuStatus();
         }
 
-        private async void InitLCUStatus()
+        private async void InitLcuStatus()
         {
             while (true)
             {
-                try
-                {
-                    Utils.SendStatusToLCU(status);
-                    return;
-                }
-                catch
+                if ((_ws = Utils.MonitorChatStatusChange(status)) == null)
                 {
                     // LCU is not ready yet. Wait for a bit.
                     await Task.Delay(3000);
                 }
+                else return;
             }
         }
 
@@ -215,7 +213,8 @@ namespace Deceive
             if (string.IsNullOrEmpty(this.lastPresence)) return;
 
             this.PossiblyRewriteAndResendPresence(this.lastPresence, status);
-            Utils.SendStatusToLCU(status);
+            _ws.Close();
+            Utils.MonitorChatStatusChange(status);
         }
 
         private void LoadStatus()
