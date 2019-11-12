@@ -1,19 +1,22 @@
-﻿using System.Drawing;
-using System.IO;
+﻿using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
+using Deceive.Properties;
+using WebSocketSharp;
 
 namespace Deceive
 {
     public class MainController : ApplicationContext
     {
-        private NotifyIcon trayIcon;
+        private readonly NotifyIcon trayIcon;
         private bool enabled = true;
         private string status;
-        private string statusFile = Path.Combine(Utils.DATA_DIR, "status");
+        private WebSocket _ws;
+        private readonly string statusFile = Path.Combine(Utils.DATA_DIR, "status");
 
         private SslStream incoming;
         private SslStream outgoing;
@@ -23,42 +26,66 @@ namespace Deceive
         {
             trayIcon = new NotifyIcon()
             {
-                Icon = Properties.Resources.deceive,
+                Icon = Resources.deceive,
                 Visible = true,
-                BalloonTipTitle = "Deceive",
+                BalloonTipTitle = Resources.DeceiveTitle,
                 BalloonTipText = "Deceive is currently masking your status. Right-Click the tray icon for more options."
             };
             trayIcon.ShowBalloonTip(5000);
             LoadStatus();
             SetupMenuItems();
+            InitLcuStatus();
+        }
+
+        private async void InitLcuStatus()
+        {
+            while (true)
+            {
+                if ((_ws = Utils.MonitorChatStatusChange(status)) == null)
+                {
+                    // LCU is not ready yet. Wait for a bit.
+                    await Task.Delay(3000);
+                }
+                else return;
+            }
         }
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem("Deceive v1.4.1");
-            aboutMenuItem.Enabled = false;
+            var aboutMenuItem = new MenuItem(Resources.DeceiveTitle)
+            {
+                Enabled = false
+            };
 
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
             {
                 enabled = !enabled;
-                UpdateStatus(enabled ? status : "online");
+                UpdateStatus(enabled ? status : "chat");
                 SetupMenuItems();
-            });
-            enabledMenuItem.Checked = enabled;
+            })
+            {
+                Checked = enabled
+            };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
                 UpdateStatus(status = "offline");
+                enabled = true;
                 SetupMenuItems();
-            });
-            offlineStatus.Checked = status.Equals("offline");
+            })
+            {
+                Checked = status.Equals("offline")
+            };
 
             var mobileStatus = new MenuItem("Mobile", (a, e) =>
             {
                 UpdateStatus(status = "mobile");
+                enabled = true;
                 SetupMenuItems();
-            });
-            mobileStatus.Checked = status.Equals("mobile");
+            })
+            {
+                Checked = status.Equals("mobile")
+            };
 
             var typeMenuItem = new MenuItem("Status Type", new MenuItem[] { offlineStatus, mobileStatus });
 
@@ -66,7 +93,7 @@ namespace Deceive
             {
                 var result = MessageBox.Show(
                     "Are you sure you want to stop Deceive? This will also stop League if it is running.",
-                    "Deceive",
+                    Resources.DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button1
@@ -158,12 +185,13 @@ namespace Deceive
                     this.lastPresence = content;
                     presence["show"].InnerText = targetStatus;
 
-                    if (targetStatus != "online")
+                    if (targetStatus != "chat")
                     {
                         var status = new XmlDocument();
                         status.LoadXml(presence["status"].InnerText);
                         status["body"]["statusMsg"].InnerText = "";
                         status["body"]["gameStatus"].InnerText = "outOfGame";
+                        if (status["body"].InnerXml.Contains("pty")) status["body"].RemoveChild(status["body"]["pty"]);
 
                         presence["status"].InnerText = status.OuterXml;
                     }
@@ -185,6 +213,8 @@ namespace Deceive
             if (string.IsNullOrEmpty(this.lastPresence)) return;
 
             this.PossiblyRewriteAndResendPresence(this.lastPresence, status);
+            _ws.Close();
+            Utils.MonitorChatStatusChange(status);
         }
 
         private void LoadStatus()
