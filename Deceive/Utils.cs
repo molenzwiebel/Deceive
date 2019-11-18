@@ -8,6 +8,7 @@ using System.Linq;
 using System.Management;
 using System.Net;
 using System.Reflection;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -280,6 +281,7 @@ namespace Deceive
                 var portToken = GetApiPortAndToken(process);
                 if (portToken == null) return;
                 var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes("riot:" + portToken.Token));
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
                 ServicePointManager.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
                 using (var client = new WebClient())
                 {
@@ -297,6 +299,7 @@ namespace Deceive
                 var apiAuth = GetApiPortAndToken(process);
                 var ws = new WebSocket($"wss://127.0.0.1:{apiAuth.Port}/", "wamp");
                 ws.SetCredentials("riot", apiAuth.Token, true);
+                ws.SslConfiguration.EnabledSslProtocols = SslProtocols.Tls12;
                 ws.SslConfiguration.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
                 ws.OnMessage += (s, e) =>
                 {
