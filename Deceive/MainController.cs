@@ -24,7 +24,7 @@ namespace Deceive
 
         public MainController()
         {
-            trayIcon = new NotifyIcon()
+            trayIcon = new NotifyIcon
             {
                 Icon = Resources.deceive,
                 Visible = true,
@@ -114,8 +114,8 @@ namespace Deceive
             this.incoming = incoming;
             this.outgoing = outgoing;
 
-            new Thread(() => this.IncomingLoop()).Start();
-            new Thread(() => this.OutgoingLoop()).Start();
+            new Thread(IncomingLoop).Start();
+            new Thread(OutgoingLoop).Start();
         }
 
         private void IncomingLoop()
@@ -127,17 +127,17 @@ namespace Deceive
 
                 do
                 {
-                    byteCount = this.incoming.Read(bytes, 0, bytes.Length);
+                    byteCount = incoming.Read(bytes, 0, bytes.Length);
 
                     var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
                     // If this is possibly a presence stanza, rewrite it.
-                    if (content.Contains("<presence") && this.enabled)
+                    if (content.Contains("<presence") && enabled)
                     {
-                        this.PossiblyRewriteAndResendPresence(content, this.status);
+                        PossiblyRewriteAndResendPresence(content, status);
                     }
                     else
                     {
-                        this.outgoing.Write(bytes, 0, byteCount);
+                        outgoing.Write(bytes, 0, byteCount);
                     }
                 } while (byteCount != 0);
             }
@@ -158,8 +158,8 @@ namespace Deceive
 
                 do
                 {
-                    byteCount = this.outgoing.Read(bytes, 0, bytes.Length);
-                    this.incoming.Write(bytes, 0, byteCount);
+                    byteCount = outgoing.Read(bytes, 0, bytes.Length);
+                    incoming.Write(bytes, 0, byteCount);
                 } while (byteCount != 0);
 
                 System.Console.WriteLine("Outgoing closed.");
@@ -182,7 +182,7 @@ namespace Deceive
                 var presence = xml["presence"];
                 if (presence != null && presence.Attributes["to"] == null)
                 {
-                    this.lastPresence = content;
+                    lastPresence = content;
                     presence["show"].InnerText = targetStatus;
 
                     if (targetStatus != "chat")
@@ -199,22 +199,22 @@ namespace Deceive
                     content = presence.OuterXml;
                 }
 
-                this.outgoing.Write(Encoding.UTF8.GetBytes(content));
+                outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
             catch
             {
                 System.Console.WriteLine("Error rewriting presence. Sending the raw value.");
-                this.outgoing.Write(Encoding.UTF8.GetBytes(content));
+                outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
         }
 
-        private void UpdateStatus(string status)
+        private void UpdateStatus(string newStatus)
         {
-            if (string.IsNullOrEmpty(this.lastPresence)) return;
+            if (string.IsNullOrEmpty(lastPresence)) return;
 
-            this.PossiblyRewriteAndResendPresence(this.lastPresence, status);
+            PossiblyRewriteAndResendPresence(lastPresence, newStatus);
             _ws.Close();
-            Utils.MonitorChatStatusChange(status);
+            _ws = Utils.MonitorChatStatusChange(newStatus);
         }
 
         private void LoadStatus()

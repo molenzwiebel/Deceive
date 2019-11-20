@@ -67,7 +67,7 @@ namespace Deceive
         public static string GetLCUPath()
         {
             string path;
-            string initialDirectory = "C:\\Riot Games\\League of Legends";
+            const string initialDirectory = "C:\\Riot Games\\League of Legends";
 
             if (File.Exists(CONFIG_PATH))
                 path = File.ReadAllText(CONFIG_PATH);
@@ -128,7 +128,7 @@ namespace Deceive
         {
             try
             {
-                if (String.IsNullOrEmpty(path))
+                if (string.IsNullOrEmpty(path))
                     return false;
 
                 string folder = Path.GetDirectoryName(path);
@@ -278,16 +278,16 @@ namespace Deceive
         {
             foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
             {
-                var portToken = GetApiPortAndToken(process);
-                if (portToken == null) return;
-                var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes("riot:" + portToken.Token));
+                var apiAuth = GetApiPortAndToken(process);
+                if (apiAuth == null) return;
+                var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes("riot:" + apiAuth.Token));
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
                 ServicePointManager.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
                 using (var client = new WebClient())
                 {
                     client.Headers.Add(HttpRequestHeader.Authorization, "Basic " + auth);
                     var body = "{\"availability\": \"" + status + "\"}";
-                    client.UploadString(new Uri("https://127.0.0.1:" + portToken.Port + "/lol-chat/v1/me"), "PUT", body);
+                    client.UploadString(new Uri("https://127.0.0.1:" + apiAuth.Port + "/lol-chat/v1/me"), "PUT", body);
                 }
             }
         }
@@ -297,6 +297,7 @@ namespace Deceive
             foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
             {
                 var apiAuth = GetApiPortAndToken(process);
+                if (apiAuth == null) return null;
                 var ws = new WebSocket($"wss://127.0.0.1:{apiAuth.Port}/", "wamp");
                 ws.SetCredentials("riot", apiAuth.Token, true);
                 ws.SslConfiguration.EnabledSslProtocols = SslProtocols.Tls12;
