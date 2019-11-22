@@ -8,10 +8,12 @@ using System.Linq;
 using System.Management;
 using System.Net;
 using System.Reflection;
+using System.Security.Authentication;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Deceive.Properties;
+using WebSocketSharp;
 
 namespace Deceive
 {
@@ -65,7 +67,7 @@ namespace Deceive
         public static string GetLCUPath()
         {
             string path;
-            string initialDirectory = "C:\\Riot Games\\League of Legends";
+            const string initialDirectory = "C:\\Riot Games\\League of Legends";
 
             if (File.Exists(CONFIG_PATH))
                 path = File.ReadAllText(CONFIG_PATH);
@@ -78,7 +80,7 @@ namespace Deceive
                 }
                 else
                 {
-                    path = registry.ToString() + "\\LeagueClient.exe";
+                    path = registry + "\\LeagueClient.exe";
                 }
             }
 
@@ -126,11 +128,11 @@ namespace Deceive
         {
             try
             {
-                if (String.IsNullOrEmpty(path))
+                if (string.IsNullOrEmpty(path))
                     return false;
 
                 string folder = Path.GetDirectoryName(path);
-                return File.Exists(folder + "\\LeagueClient.exe") && Directory.Exists(folder + "\\Config") && Directory.Exists(folder + "\\Logs");
+                return File.Exists(folder + "\\LeagueClient.exe") && Directory.Exists(folder + "\\Config") && File.Exists(folder + "\\system.yaml");
             }
             catch
             {
@@ -221,24 +223,20 @@ namespace Deceive
             var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Riot Games/RiotClientInstalls.json");
             if (!File.Exists(installPath)) return null;
 
-            JsonObject data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
-            string[] rcPaths = {};
-            if (data.ContainsKey("rc_default")) rcPaths.Append(data["rc_default"]);
-            if (data.ContainsKey("rc_live")) rcPaths.Append(data["rc_live"]);
-            if (data.ContainsKey("rc_beta")) rcPaths.Append(data["rc_beta"]);
-
-            foreach (var entry in rcPaths)
-            {
-                if (File.Exists(entry)) return entry;
-            }
+            var data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
+            var rcPaths = new List<string>();
             
-            return null;
+            if (data.ContainsKey("rc_default")) rcPaths.Add(data["rc_default"].ToString());
+            if (data.ContainsKey("rc_live")) rcPaths.Add(data["rc_live"].ToString());
+            if (data.ContainsKey("rc_beta")) rcPaths.Add(data["rc_beta"].ToString());
+
+            return rcPaths.FirstOrDefault(File.Exists);
         }
 
         //Class for storing LCU API port and auth token
-        public class LCUAPIPortToken
+        private class LcuApiPortToken
         {
-            public LCUAPIPortToken(string port, string token)
+            public LcuApiPortToken(string port, string token)
             {
                 Port = port;
                 Token = token;
@@ -250,17 +248,17 @@ namespace Deceive
         }
 
         //Reads LCU API port and auth token from LCU command line
-        public static LCUAPIPortToken GetAPIPortAndToken(Process process)
+        private static LcuApiPortToken GetApiPortAndToken(Process process)
         {
-            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher("SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + process.Id))
-            using (ManagementObjectCollection objects = searcher.Get())
+            using (var searcher = new ManagementObjectSearcher("SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + process.Id))
+            using (var objects = searcher.Get())
             {
-                var commandLine = (string)objects.Cast<ManagementBaseObject>().SingleOrDefault()["CommandLine"];
+                var commandLine = (string)objects.Cast<ManagementBaseObject>().SingleOrDefault()?["CommandLine"];
                 try
                 {
                     var port = PORT_REGEX.Match(commandLine).Groups[1].Value;
                     var token = AUTH_TOKEN_REGEX.Match(commandLine).Groups[1].Value;
-                    return new LCUAPIPortToken(port, token);
+                    return new LcuApiPortToken(port, token);
                 }
                 catch (Exception ex)
                 {
@@ -276,21 +274,45 @@ namespace Deceive
          * This happens only locally, since Deceive masks whole presence with 'gameStatus' as 'outOfGame'.
          * If we passed this (whole presence) too LCU just overrides it.
          */
-        public static void SendStatusToLCU(string status)
+        private static void SendStatusToLcu(string status)
         {
-            foreach (Process process in Process.GetProcessesByName("LeagueClientUx"))
+            foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
             {
-                var portToken = GetAPIPortAndToken(process);
-                if (portToken == null) return;
-                var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes("riot:" + portToken.Token));
+                var apiAuth = GetApiPortAndToken(process);
+                if (apiAuth == null) return;
+                var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes("riot:" + apiAuth.Token));
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
                 ServicePointManager.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
                 using (var client = new WebClient())
                 {
                     client.Headers.Add(HttpRequestHeader.Authorization, "Basic " + auth);
-                    string body = "{\"availability\": \"" + status + "\"}";
-                    client.UploadString(new Uri("https://127.0.0.1:" + portToken.Port + "/lol-chat/v1/me"), "PUT", body);
+                    var body = "{\"availability\": \"" + status + "\"}";
+                    client.UploadString(new Uri("https://127.0.0.1:" + apiAuth.Port + "/lol-chat/v1/me"), "PUT", body);
                 }
             }
+        }
+        
+        public static WebSocket MonitorChatStatusChange(string status)
+        {
+            foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
+            {
+                var apiAuth = GetApiPortAndToken(process);
+                if (apiAuth == null) return null;
+                var ws = new WebSocket($"wss://127.0.0.1:{apiAuth.Port}/", "wamp");
+                ws.SetCredentials("riot", apiAuth.Token, true);
+                ws.SslConfiguration.EnabledSslProtocols = SslProtocols.Tls12;
+                ws.SslConfiguration.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
+                ws.OnMessage += (s, e) =>
+                {
+                    if (!e.IsText) return;
+                    SendStatusToLcu(status);
+                };
+                ws.Connect();
+                ws.Send("[5, \"OnJsonApiEvent_lol-chat_v1_me\"]");
+                return ws;
+            }
+
+            return null;
         }
     }
 }

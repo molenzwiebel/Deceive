@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 using Deceive.Properties;
+using WebSocketSharp;
 
 namespace Deceive
 {
@@ -14,6 +15,7 @@ namespace Deceive
         private readonly NotifyIcon trayIcon;
         private bool enabled = true;
         private string status;
+        private WebSocket _ws;
         private readonly string statusFile = Path.Combine(Utils.DATA_DIR, "status");
 
         private SslStream incoming;
@@ -22,7 +24,7 @@ namespace Deceive
 
         public MainController()
         {
-            trayIcon = new NotifyIcon()
+            trayIcon = new NotifyIcon
             {
                 Icon = Resources.deceive,
                 Visible = true,
@@ -32,23 +34,19 @@ namespace Deceive
             trayIcon.ShowBalloonTip(5000);
             LoadStatus();
             SetupMenuItems();
-            InitLCUStatus();
+            InitLcuStatus();
         }
 
-        private async void InitLCUStatus()
+        private async void InitLcuStatus()
         {
             while (true)
             {
-                try
-                {
-                    Utils.SendStatusToLCU(status);
-                    return;
-                }
-                catch
+                if ((_ws = Utils.MonitorChatStatusChange(status)) == null)
                 {
                     // LCU is not ready yet. Wait for a bit.
                     await Task.Delay(3000);
                 }
+                else return;
             }
         }
 
@@ -116,8 +114,8 @@ namespace Deceive
             this.incoming = incoming;
             this.outgoing = outgoing;
 
-            new Thread(() => this.IncomingLoop()).Start();
-            new Thread(() => this.OutgoingLoop()).Start();
+            new Thread(IncomingLoop).Start();
+            new Thread(OutgoingLoop).Start();
         }
 
         private void IncomingLoop()
@@ -129,17 +127,17 @@ namespace Deceive
 
                 do
                 {
-                    byteCount = this.incoming.Read(bytes, 0, bytes.Length);
+                    byteCount = incoming.Read(bytes, 0, bytes.Length);
 
                     var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
                     // If this is possibly a presence stanza, rewrite it.
-                    if (content.Contains("<presence") && this.enabled)
+                    if (content.Contains("<presence") && enabled)
                     {
-                        this.PossiblyRewriteAndResendPresence(content, this.status);
+                        PossiblyRewriteAndResendPresence(content, status);
                     }
                     else
                     {
-                        this.outgoing.Write(bytes, 0, byteCount);
+                        outgoing.Write(bytes, 0, byteCount);
                     }
                 } while (byteCount != 0);
             }
@@ -160,8 +158,8 @@ namespace Deceive
 
                 do
                 {
-                    byteCount = this.outgoing.Read(bytes, 0, bytes.Length);
-                    this.incoming.Write(bytes, 0, byteCount);
+                    byteCount = outgoing.Read(bytes, 0, bytes.Length);
+                    incoming.Write(bytes, 0, byteCount);
                 } while (byteCount != 0);
 
                 System.Console.WriteLine("Outgoing closed.");
@@ -184,7 +182,7 @@ namespace Deceive
                 var presence = xml["presence"];
                 if (presence != null && presence.Attributes["to"] == null)
                 {
-                    this.lastPresence = content;
+                    lastPresence = content;
                     presence["show"].InnerText = targetStatus;
 
                     if (targetStatus != "chat")
@@ -201,21 +199,22 @@ namespace Deceive
                     content = presence.OuterXml;
                 }
 
-                this.outgoing.Write(Encoding.UTF8.GetBytes(content));
+                outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
             catch
             {
                 System.Console.WriteLine("Error rewriting presence. Sending the raw value.");
-                this.outgoing.Write(Encoding.UTF8.GetBytes(content));
+                outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
         }
 
-        private void UpdateStatus(string status)
+        private void UpdateStatus(string newStatus)
         {
-            if (string.IsNullOrEmpty(this.lastPresence)) return;
+            if (string.IsNullOrEmpty(lastPresence)) return;
 
-            this.PossiblyRewriteAndResendPresence(this.lastPresence, status);
-            Utils.SendStatusToLCU(status);
+            PossiblyRewriteAndResendPresence(lastPresence, newStatus);
+            _ws.Close();
+            _ws = Utils.MonitorChatStatusChange(newStatus);
         }
 
         private void LoadStatus()

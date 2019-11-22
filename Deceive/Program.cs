@@ -94,7 +94,7 @@ namespace Deceive
                 startArgs = new ProcessStartInfo
                 {
                     FileName = riotClientPath,
-                    Arguments = "--priority-launch-pid=12345 --priority-launch-path=\"" + leaguePath + "\" -- --system-yaml-override=\"" + yamlPath + "\"",
+                    Arguments = "--priority-launch-pid=12345 --priority-launch-path=\"" + leaguePath + "\" -- --system-yaml-override=\"" + yamlPath + "\""
                 };
             }
             else
@@ -102,7 +102,7 @@ namespace Deceive
                 startArgs = new ProcessStartInfo
                 {
                     FileName = leaguePath,
-                    Arguments = "--system-yaml-override=\"" + yamlPath + "\"",
+                    Arguments = "--system-yaml-override=\"" + yamlPath + "\""
                 };
             }
 
@@ -112,7 +112,7 @@ namespace Deceive
 
             // Step 5: Connect sockets.
             var sslIncoming = new SslStream(incoming.GetStream());
-            var cert = new X509Certificate2(Properties.Resources.certificates);
+            var cert = new X509Certificate2(Resources.certificates);
             sslIncoming.AuthenticateAsServer(cert);
 
             // Find the chat information of the original system.yaml for that region.
