@@ -308,7 +308,7 @@ namespace Deceive
                     SendStatusToLcu(status);
                 };
                 ws.Connect();
-                ws.Send("[5, \"OnJsonApiEvent_lol-chat_v1_me\"]");
+                ws.Send("[5, \"OnJsonApiEvent_lol-gameflow_v1_gameflow-phase\"]");
                 return ws;
             }
 
