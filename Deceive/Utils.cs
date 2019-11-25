@@ -274,7 +274,7 @@ namespace Deceive
          * This happens only locally, since Deceive masks whole presence with 'gameStatus' as 'outOfGame'.
          * If we passed this (whole presence) too LCU just overrides it.
          */
-        private static void SendStatusToLcu(string status)
+        internal static void SendStatusToLcu(string status)
         {
             foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
             {
