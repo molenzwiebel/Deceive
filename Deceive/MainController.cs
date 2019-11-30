@@ -226,7 +226,8 @@ namespace Deceive
 
             PossiblyRewriteAndResendPresence(lastPresence, newStatus);
             _ws.Close();
-            _ws = Utils.MonitorChatStatusChange(newStatus);
+            Utils.SendStatusToLcu(newStatus);
+            if (enabled) _ws = Utils.MonitorChatStatusChange(newStatus);
         }
 
         private void LoadStatus()
