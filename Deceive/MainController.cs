@@ -199,13 +199,35 @@ namespace Deceive
 
                     if (targetStatus != "chat")
                     {
-                        var status = new XmlDocument();
-                        status.LoadXml(presence["status"].InnerText);
-                        status["body"]["statusMsg"].InnerText = "";
-                        status["body"]["gameStatus"].InnerText = "outOfGame";
-                        if (status["body"].InnerXml.Contains("pty")) status["body"].RemoveChild(status["body"]["pty"]);
+                        //Without RC chat proxy
+                        if (presence["status"] != null && presence["status"].InnerText != "")
+                        {
+                            var statusXml = new XmlDocument();
+                            statusXml.LoadXml(presence["status"].InnerText);
+                            statusXml["body"]["statusMsg"].InnerText = "";
+                            statusXml["body"]["gameStatus"].InnerText = "outOfGame";
+                            if (statusXml["body"]["pty"] != null) statusXml["body"].RemoveChild(statusXml["body"]["pty"]);
+                            presence["status"].InnerText = statusXml.OuterXml;
+                        }
 
-                        presence["status"].InnerText = status.OuterXml;
+                        //With RC chat proxy
+                        if (presence["games"] != null)
+                        {
+                            //Just keeping this here in case we need it later...
+                            /*
+                            presence["games"]["league_of_legends"]["st"].InnerText = targetStatus;
+                            
+                            if (presence["games"]["league_of_legends"]["p"] != null)
+                            {
+                                var p = (JsonObject)SimpleJson.DeserializeObject(presence["games"]["league_of_legends"]["p"].InnerText);
+                                if (p.ContainsKey("gameStatus")) p["gameStatus"] = "outOfGame";
+                                presence["games"]["league_of_legends"]["p"].InnerText = SimpleJson.SerializeObject(p);
+                            }
+                            */
+                            
+                            //Don't need to bother changing game specific presence, just remove it altogether.
+                            if (presence["games"]["league_of_legends"] != null) presence["games"].RemoveChild(presence["games"]["league_of_legends"]);
+                        }
                     }
 
                     content = presence.OuterXml;
