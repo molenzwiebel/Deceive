@@ -13,12 +13,16 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Deceive.Properties;
+using System.Net.Http;
 using WebSocketSharp;
+using System.Threading.Tasks;
 
 namespace Deceive
 {
     class Utils
     {
+        private static readonly HttpClient HTTP_CLIENT = new HttpClient();
+
         public static readonly string DATA_DIR = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
         private static readonly Regex AUTH_TOKEN_REGEX = new Regex("\"--remoting-auth-token=(.+?)\"");
         private static readonly Regex PORT_REGEX = new Regex("\"--app-port=(\\d+?)\"");
@@ -89,7 +93,7 @@ namespace Deceive
                 // Notify that the path is invalid.
                 MessageBox.Show(
                     "Could not find the League client at " + path + ". Please select the location of 'LeagueClient.exe' manually.",
-                    Resources.DeceiveTitle,
+                    MainClass.DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Exclamation
                 );
@@ -119,6 +123,54 @@ namespace Deceive
             File.WriteAllText(CONFIG_PATH, path);
 
             return path;
+        }
+
+        /**
+         * Asynchronously checks if the current version of Deceive is the latest version. If not, and the user has
+         * not dismissed the message before, an alert is shwon.
+         */
+        public static async Task CheckForUpdates()
+        {
+            try
+            {
+                HTTP_CLIENT.DefaultRequestHeaders.UserAgent.Add(new System.Net.Http.Headers.ProductInfoHeaderValue("Deceive", Resources.DeceiveVersion));
+
+                var response = await HTTP_CLIENT.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
+                var content = await response.Content.ReadAsStringAsync();
+                dynamic release = SimpleJson.DeserializeObject(content);
+                var latestVersion = release["tag_name"];
+
+                // If failed to fetch or already latest, return.
+                if (latestVersion == null) return;
+                if (latestVersion == Resources.DeceiveVersion) return;
+
+                // Check if we have shown this before.
+                var persistencePath = Path.Combine(DATA_DIR, "updateVersionPrompted");
+                var latestShownVersion = File.Exists(persistencePath) ? File.ReadAllText(persistencePath) : "";
+
+                // If we have, return.
+                if (latestShownVersion == latestVersion) return;
+
+                // Show a message and record the latest shown.
+                File.WriteAllText(persistencePath, latestVersion);
+
+                var result = MessageBox.Show(
+                    $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {Resources.DeceiveVersion}. Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\nPress OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
+                    MainClass.DeceiveTitle,
+                    MessageBoxButtons.OKCancel,
+                    MessageBoxIcon.Information,
+                    MessageBoxDefaultButton.Button1
+                );
+
+                if (result == DialogResult.OK)
+                {
+                    // Open the url in the browser.
+                    Process.Start(release["html_url"]);
+                }
+            }
+            {
+                // Ignored.
+            }
         }
 
         /**
@@ -162,7 +214,7 @@ namespace Deceive
                 {
                     var result = MessageBox.Show(
                         "League is currently running in admin mode. In order to proceed Deceive also needs to be elevated. Do you want Deceive to restart in admin mode?",
-                        Resources.DeceiveTitle,
+                        MainClass.DeceiveTitle,
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question,
                         MessageBoxDefaultButton.Button1

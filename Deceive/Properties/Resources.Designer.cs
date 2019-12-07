@@ -81,11 +81,11 @@ namespace Deceive.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Deceive v1.6.0.
+        ///   Looks up a localized string similar to v1.6.0.
         /// </summary>
-        internal static string DeceiveTitle {
+        internal static string DeceiveVersion {
             get {
-                return ResourceManager.GetString("DeceiveTitle", resourceCulture);
+                return ResourceManager.GetString("DeceiveVersion", resourceCulture);
             }
         }
     }
