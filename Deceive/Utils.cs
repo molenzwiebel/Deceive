@@ -168,6 +168,7 @@ namespace Deceive
                     Process.Start(release["html_url"]);
                 }
             }
+            catch
             {
                 // Ignored.
             }
