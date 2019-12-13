@@ -38,10 +38,12 @@ namespace Deceive
 
             // Run this on a new thread, just for the sake of it.
             // It seemed to be buggy if run on the same thread.
-            new Thread(() =>
+            var thread = new Thread(() =>
             {
                 server.RunAsync().Wait();
-            }).Start();
+            });
+            thread.IsBackground = true;
+            thread.Start();
 
             return port;
         }
