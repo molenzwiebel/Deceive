@@ -7,7 +7,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Deceive.Properties;
 using EmbedIO;
 using EmbedIO.Actions;
 
@@ -54,7 +53,6 @@ namespace Deceive
         private async static Task ProxyAndRewriteResponse(string configUrl, int chatPort, IHttpContext ctx)
         {
             var url = configUrl + ctx.Request.RawUrl;
-            Console.WriteLine(url);
 
             using (var message = new HttpRequestMessage(HttpMethod.Get, url))
             {
@@ -119,7 +117,7 @@ namespace Deceive
                     MessageBox.Show(
                         "Deceive was unable to rewrite a League of Legends configuration file. This normally happens because Riot changed something on their end. Please check if there's a new version of Deceive available, or contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord if there's not.\n\n" +
                         ex,
-                        Resources.DeceiveTitle,
+                        MainClass.DeceiveTitle,
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Error,
                         MessageBoxDefaultButton.Button1

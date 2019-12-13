@@ -15,6 +15,14 @@ namespace Deceive
 {
     class MainClass
     {
+        public static string DeceiveTitle
+        {
+            get
+            {
+                return "Deceive " + Resources.DeceiveVersion;
+            }
+        }
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -27,7 +35,7 @@ namespace Deceive
                 // Show some kind of message so that Deceive doesn't just disappear.
                 MessageBox.Show(
                     "Deceive encountered an error and couldn't properly initialize itself. Please contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord.\n\n" + ex,
-                    Resources.DeceiveTitle,
+                    DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error,
                     MessageBoxDefaultButton.Button1
@@ -47,7 +55,7 @@ namespace Deceive
 
                 var result = MessageBox.Show(
                     "League is currently running. In order to mask your online status, League needs to be started by Deceive. Do you want Deceive to stop League, so that it can restart it with the proper configuration?",
-                    Resources.DeceiveTitle,
+                    DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button1
@@ -57,6 +65,10 @@ namespace Deceive
                 Utils.KillLCU();
                 Thread.Sleep(2000); // Riot Client takes a while to die
             }
+
+            // Step 0: Check for updates in the background.
+            // Intentionally not awaited.
+            Utils.CheckForUpdates();
 
             // Step 1: Open a port for our proxy, so we can patch the port number into the system yaml.
             var listener = new TcpListener(IPAddress.Loopback, 0);
@@ -95,7 +107,7 @@ namespace Deceive
             {
                 MessageBox.Show(
                     "Deceive was unable to find the path to the Riot Launcher. If you have League installed and it is working properly, please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
-                    Resources.DeceiveTitle,
+                    DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button1
