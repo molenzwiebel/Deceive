@@ -358,10 +358,14 @@ namespace Deceive
                 ws.OnMessage += (s, e) =>
                 {
                     if (!e.IsText) return;
+                    var json = (JsonArray) SimpleJson.DeserializeObject(e.Data);
+                    if ((long) json[0] != 8) return;
+                    var statusJson = (JsonObject)((JsonObject) json[2])[0];
+                    if (!statusJson.ContainsKey("availability") || (string) statusJson["availability"] == "dnd") return;
                     SendStatusToLcu(status);
                 };
                 ws.Connect();
-                ws.Send("[5, \"OnJsonApiEvent_lol-gameflow_v1_gameflow-phase\"]");
+                ws.Send("[5, \"OnJsonApiEvent_lol-chat_v1_me\"]");
                 return ws;
             }
 

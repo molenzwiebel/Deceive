@@ -45,20 +45,8 @@ namespace Deceive
                 {
                     // LCU is not ready yet. Wait for a bit.
                     await Task.Delay(3000);
-                }
-                else
-                {
-                    try
-                    {
-                        Utils.SendStatusToLcu(status);
-                        return;
-                    }
-                    catch
-                    {
-                        // LCU is not ready yet. Wait for a bit.
-                        await Task.Delay(3000);
-                    }
-                }
+                    
+                } else return;
             }
         }
 
