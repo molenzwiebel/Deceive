@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
@@ -28,7 +28,7 @@ namespace Deceive
             {
                 Icon = Resources.deceive,
                 Visible = true,
-                BalloonTipTitle = MainClass.DeceiveTitle,
+                BalloonTipTitle = StartupHandler.DeceiveTitle,
                 BalloonTipText = "Deceive is currently masking your status. Right-Click the tray icon for more options."
             };
             trayIcon.ShowBalloonTip(5000);
@@ -52,7 +52,7 @@ namespace Deceive
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem(MainClass.DeceiveTitle)
+            var aboutMenuItem = new MenuItem(StartupHandler.DeceiveTitle)
             {
                 Enabled = false
             };
@@ -93,7 +93,7 @@ namespace Deceive
             {
                 var result = MessageBox.Show(
                     "Are you sure you want to stop Deceive? This will also stop League if it is running.",
-                    MainClass.DeceiveTitle,
+                    StartupHandler.DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button1

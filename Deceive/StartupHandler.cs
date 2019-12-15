@@ -13,15 +13,9 @@ using YamlDotNet.RepresentationModel;
 
 namespace Deceive
 {
-    class MainClass
+    class StartupHandler
     {
-        public static string DeceiveTitle
-        {
-            get
-            {
-                return "Deceive " + Resources.DeceiveVersion;
-            }
-        }
+        public static string DeceiveTitle => "Deceive " + Resources.DeceiveVersion;
 
         [STAThread]
         public static void Main(string[] args)
@@ -67,7 +61,6 @@ namespace Deceive
             }
 
             // Step 0: Check for updates in the background.
-            // Intentionally not awaited.
             Utils.CheckForUpdates();
 
             // Step 1: Open a port for our proxy, so we can patch the port number into the system yaml.
