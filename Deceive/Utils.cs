@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using Microsoft.WindowsAPICodePack.Dialogs;
 using System;
 using System.Collections.Generic;
@@ -345,7 +345,7 @@ namespace Deceive
             }
         }
         
-        public static WebSocket MonitorChatStatusChange(string status)
+        public static WebSocket MonitorChatStatusChange(string status, bool enabled)
         {
             foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
             {
@@ -361,8 +361,12 @@ namespace Deceive
                     var json = (JsonArray) SimpleJson.DeserializeObject(e.Data);
                     if ((long) json[0] != 8) return;
                     var statusJson = (JsonObject)((JsonObject) json[2])[0];
-                    if (!statusJson.ContainsKey("availability") || (string) statusJson["availability"] == "dnd") return;
+                    if (!statusJson.ContainsKey("availability")) return;
+                    var availability = (string) statusJson["availability"]; 
+                    if (availability == "dnd" || availability == status || availability == "away") return;
+                    Trace.WriteLine((string) statusJson["availability"]);
                     SendStatusToLcu(status);
+                    if (!enabled) ws.Close();
                 };
                 ws.Connect();
                 ws.Send("[5, \"OnJsonApiEvent_lol-chat_v1_me\"]");

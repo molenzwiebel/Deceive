@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
@@ -41,7 +41,7 @@ namespace Deceive
         {
             while (true)
             {
-                if ((_ws = Utils.MonitorChatStatusChange(status)) == null)
+                if ((_ws = Utils.MonitorChatStatusChange(status, enabled)) == null)
                 {
                     // LCU is not ready yet. Wait for a bit.
                     await Task.Delay(3000);
@@ -237,7 +237,7 @@ namespace Deceive
             PossiblyRewriteAndResendPresence(lastPresence, newStatus);
             _ws.Close();
             Utils.SendStatusToLcu(newStatus);
-            if (enabled) _ws = Utils.MonitorChatStatusChange(newStatus);
+            _ws = Utils.MonitorChatStatusChange(newStatus, enabled);
         }
 
         private void LoadStatus()
