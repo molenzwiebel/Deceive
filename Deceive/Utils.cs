@@ -93,7 +93,7 @@ namespace Deceive
                 // Notify that the path is invalid.
                 MessageBox.Show(
                     "Could not find the League client at " + path + ". Please select the location of 'LeagueClient.exe' manually.",
-                    MainClass.DeceiveTitle,
+                    StartupHandler.DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Exclamation
                 );
@@ -127,9 +127,9 @@ namespace Deceive
 
         /**
          * Asynchronously checks if the current version of Deceive is the latest version. If not, and the user has
-         * not dismissed the message before, an alert is shwon.
+         * not dismissed the message before, an alert is shown.
          */
-        public static async Task CheckForUpdates()
+        public static async void CheckForUpdates()
         {
             try
             {
@@ -156,7 +156,7 @@ namespace Deceive
 
                 var result = MessageBox.Show(
                     $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {Resources.DeceiveVersion}. Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\nPress OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
-                    MainClass.DeceiveTitle,
+                    StartupHandler.DeceiveTitle,
                     MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Information,
                     MessageBoxDefaultButton.Button1
@@ -215,7 +215,7 @@ namespace Deceive
                 {
                     var result = MessageBox.Show(
                         "League is currently running in admin mode. In order to proceed Deceive also needs to be elevated. Do you want Deceive to restart in admin mode?",
-                        MainClass.DeceiveTitle,
+                        StartupHandler.DeceiveTitle,
                         MessageBoxButtons.YesNo,
                         MessageBoxIcon.Question,
                         MessageBoxDefaultButton.Button1
@@ -345,7 +345,7 @@ namespace Deceive
             }
         }
         
-        public static WebSocket MonitorChatStatusChange(string status)
+        public static WebSocket MonitorChatStatusChange(string status, bool enabled)
         {
             foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
             {
@@ -358,10 +358,18 @@ namespace Deceive
                 ws.OnMessage += (s, e) =>
                 {
                     if (!e.IsText) return;
+                    var json = (JsonArray) SimpleJson.DeserializeObject(e.Data);
+                    if ((long) json[0] != 8) return;
+                    var statusJson = (JsonObject)((JsonObject) json[2])[0];
+                    if (!statusJson.ContainsKey("availability")) return;
+                    var availability = (string) statusJson["availability"]; 
+                    if (availability == "dnd" || availability == status || availability == "away") return;
+                    Trace.WriteLine((string) statusJson["availability"]);
                     SendStatusToLcu(status);
+                    if (!enabled) ws.Close();
                 };
                 ws.Connect();
-                ws.Send("[5, \"OnJsonApiEvent_lol-gameflow_v1_gameflow-phase\"]");
+                ws.Send("[5, \"OnJsonApiEvent_lol-chat_v1_me\"]");
                 return ws;
             }
 

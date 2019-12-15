@@ -28,7 +28,7 @@ namespace Deceive
             {
                 Icon = Resources.deceive,
                 Visible = true,
-                BalloonTipTitle = MainClass.DeceiveTitle,
+                BalloonTipTitle = StartupHandler.DeceiveTitle,
                 BalloonTipText = "Deceive is currently masking your status. Right-Click the tray icon for more options."
             };
             trayIcon.ShowBalloonTip(5000);
@@ -41,30 +41,18 @@ namespace Deceive
         {
             while (true)
             {
-                if ((_ws = Utils.MonitorChatStatusChange(status)) == null)
+                if ((_ws = Utils.MonitorChatStatusChange(status, enabled)) == null)
                 {
                     // LCU is not ready yet. Wait for a bit.
                     await Task.Delay(3000);
-                }
-                else
-                {
-                    try
-                    {
-                        Utils.SendStatusToLcu(status);
-                        return;
-                    }
-                    catch
-                    {
-                        // LCU is not ready yet. Wait for a bit.
-                        await Task.Delay(3000);
-                    }
-                }
+                    
+                } else return;
             }
         }
 
         private void SetupMenuItems()
         {
-            var aboutMenuItem = new MenuItem(MainClass.DeceiveTitle)
+            var aboutMenuItem = new MenuItem(StartupHandler.DeceiveTitle)
             {
                 Enabled = false
             };
@@ -105,7 +93,7 @@ namespace Deceive
             {
                 var result = MessageBox.Show(
                     "Are you sure you want to stop Deceive? This will also stop League if it is running.",
-                    MainClass.DeceiveTitle,
+                    StartupHandler.DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
                     MessageBoxDefaultButton.Button1
@@ -249,7 +237,7 @@ namespace Deceive
             PossiblyRewriteAndResendPresence(lastPresence, newStatus);
             _ws.Close();
             Utils.SendStatusToLcu(newStatus);
-            if (enabled) _ws = Utils.MonitorChatStatusChange(newStatus);
+            _ws = Utils.MonitorChatStatusChange(newStatus, enabled);
         }
 
         private void LoadStatus()
