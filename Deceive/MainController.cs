@@ -4,34 +4,34 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Xml;
+using System.Xml.Linq;
 using Deceive.Properties;
 using WebSocketSharp;
 
 namespace Deceive
 {
-    public class MainController : ApplicationContext
+    internal class MainController : ApplicationContext
     {
-        private readonly NotifyIcon trayIcon;
-        private bool enabled = true;
-        private string status;
+        private readonly NotifyIcon _trayIcon;
+        private bool _enabled = true;
+        private string _status;
         private WebSocket _ws;
-        private readonly string statusFile = Path.Combine(Utils.DATA_DIR, "status");
+        private readonly string _statusFile = Path.Combine(Utils.DataDir, "status");
 
-        private SslStream incoming;
-        private SslStream outgoing;
-        private string lastPresence; // we resend this if the state changes
+        private SslStream _incoming;
+        private SslStream _outgoing;
+        private string _lastPresence; // we resend this if the state changes
 
-        public MainController()
+        internal MainController()
         {
-            trayIcon = new NotifyIcon
+            _trayIcon = new NotifyIcon
             {
                 Icon = Resources.deceive,
                 Visible = true,
                 BalloonTipTitle = StartupHandler.DeceiveTitle,
                 BalloonTipText = "Deceive is currently masking your status. Right-Click the tray icon for more options."
             };
-            trayIcon.ShowBalloonTip(5000);
+            _trayIcon.ShowBalloonTip(5000);
             LoadStatus();
             SetupMenuItems();
             InitLcuStatus();
@@ -41,7 +41,7 @@ namespace Deceive
         {
             while (true)
             {
-                if ((_ws = Utils.MonitorChatStatusChange(status, enabled)) == null)
+                if ((_ws = Utils.MonitorChatStatusChange(_status, _enabled)) == null)
                 {
                     // LCU is not ready yet. Wait for a bit.
                     await Task.Delay(3000);
@@ -59,35 +59,35 @@ namespace Deceive
 
             var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
             {
-                enabled = !enabled;
-                UpdateStatus(enabled ? status : "chat");
+                _enabled = !_enabled;
+                UpdateStatus(_enabled ? _status : "chat");
                 SetupMenuItems();
             })
             {
-                Checked = enabled
+                Checked = _enabled
             };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
-                UpdateStatus(status = "offline");
-                enabled = true;
+                UpdateStatus(_status = "offline");
+                _enabled = true;
                 SetupMenuItems();
             })
             {
-                Checked = status.Equals("offline")
+                Checked = _status.Equals("offline")
             };
 
             var mobileStatus = new MenuItem("Mobile", (a, e) =>
             {
-                UpdateStatus(status = "mobile");
-                enabled = true;
+                UpdateStatus(_status = "mobile");
+                _enabled = true;
                 SetupMenuItems();
             })
             {
-                Checked = status.Equals("mobile")
+                Checked = _status.Equals("mobile")
             };
 
-            var typeMenuItem = new MenuItem("Status Type", new MenuItem[] { offlineStatus, mobileStatus });
+            var typeMenuItem = new MenuItem("Status Type", new[] { offlineStatus, mobileStatus });
 
             var quitMenuItem = new MenuItem("Quit", (a, b) =>
             {
@@ -101,18 +101,18 @@ namespace Deceive
 
                 if (result != DialogResult.Yes) return;
 
-                Utils.KillLCU();
+                Utils.KillClients();
                 SaveStatus();
                 Application.Exit();
             });
 
-            trayIcon.ContextMenu = new ContextMenu(new MenuItem[] { aboutMenuItem, enabledMenuItem, typeMenuItem, quitMenuItem });
+            _trayIcon.ContextMenu = new ContextMenu(new[] { aboutMenuItem, enabledMenuItem, typeMenuItem, quitMenuItem });
         }
 
         public void StartThreads(SslStream incoming, SslStream outgoing)
         {
-            this.incoming = incoming;
-            this.outgoing = outgoing;
+            _incoming = incoming;
+            _outgoing = outgoing;
 
             new Thread(IncomingLoop).Start();
             new Thread(OutgoingLoop).Start();
@@ -122,28 +122,28 @@ namespace Deceive
         {
             try
             {
-                var byteCount = 0;
+                int byteCount;
                 var bytes = new byte[2048];
 
                 do
                 {
-                    byteCount = incoming.Read(bytes, 0, bytes.Length);
+                    byteCount = _incoming.Read(bytes, 0, bytes.Length);
 
                     var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
                     // If this is possibly a presence stanza, rewrite it.
-                    if (content.Contains("<presence") && enabled)
+                    if (content.Contains("<presence") && _enabled)
                     {
-                        PossiblyRewriteAndResendPresence(content, status);
+                        PossiblyRewriteAndResendPresence(content, _status);
                     }
                     else
                     {
-                        outgoing.Write(bytes, 0, byteCount);
+                        _outgoing.Write(bytes, 0, byteCount);
                     }
                 } while (byteCount != 0);
             }
             finally
             {
-                System.Console.WriteLine("Incoming closed.");
+                System.Console.WriteLine(@"Incoming closed.");
                 SaveStatus();
                 Application.Exit();
             }
@@ -153,20 +153,20 @@ namespace Deceive
         {
             try
             {
-                var byteCount = 0;
+                int byteCount;
                 var bytes = new byte[2048];
 
                 do
                 {
-                    byteCount = outgoing.Read(bytes, 0, bytes.Length);
-                    incoming.Write(bytes, 0, byteCount);
+                    byteCount = _outgoing.Read(bytes, 0, bytes.Length);
+                    _incoming.Write(bytes, 0, byteCount);
                 } while (byteCount != 0);
 
-                System.Console.WriteLine("Outgoing closed.");
+                System.Console.WriteLine(@"Outgoing closed.");
             }
             catch
             {
-                System.Console.WriteLine("Outgoing errored.");
+                System.Console.WriteLine(@"Outgoing errored.");
                 SaveStatus();
                 Application.Exit();
             }
@@ -176,79 +176,50 @@ namespace Deceive
         {
             try
             {
-                var xml = new XmlDocument();
-                xml.LoadXml(content);
-
-                var presence = xml["presence"];
-                if (presence != null && presence.Attributes["to"] == null)
+                var xml = XDocument.Load(new StringReader(content));
+                
+                var presence = xml.Element("presence");
+                if (presence != null && presence.Attribute("to") == null)
                 {
-                    lastPresence = content;
-                    presence["show"].InnerText = targetStatus;
+                    _lastPresence = content;
+                    presence.Element("show").Value = targetStatus;
 
                     if (targetStatus != "chat")
                     {
-                        //Without RC chat proxy
-                        if (presence["status"] != null && presence["status"].InnerText != "")
-                        {
-                            var statusXml = new XmlDocument();
-                            statusXml.LoadXml(presence["status"].InnerText);
-                            statusXml["body"]["statusMsg"].InnerText = "";
-                            statusXml["body"]["gameStatus"].InnerText = "outOfGame";
-                            if (statusXml["body"]["pty"] != null) statusXml["body"].RemoveChild(statusXml["body"]["pty"]);
-                            presence["status"].InnerText = statusXml.OuterXml;
-                        }
-
-                        //With RC chat proxy
-                        if (presence["games"] != null)
-                        {
-                            //Just keeping this here in case we need it later...
-                            /*
-                            presence["games"]["league_of_legends"]["st"].InnerText = targetStatus;
-                            
-                            if (presence["games"]["league_of_legends"]["p"] != null)
-                            {
-                                var p = (JsonObject)SimpleJson.DeserializeObject(presence["games"]["league_of_legends"]["p"].InnerText);
-                                if (p.ContainsKey("gameStatus")) p["gameStatus"] = "outOfGame";
-                                presence["games"]["league_of_legends"]["p"].InnerText = SimpleJson.SerializeObject(p);
-                            }
-                            */
-                            
-                            //Don't need to bother changing game specific presence, just remove it altogether.
-                            if (presence["games"]["league_of_legends"] != null) presence["games"].RemoveChild(presence["games"]["league_of_legends"]);
-                        }
+                        presence.Element("status")?.Remove(); 
+                        presence.Element("games")?.Element("league_of_legends")?.Remove();
                     }
 
-                    content = presence.OuterXml;
+                    content = presence.ToString();
                 }
-
-                outgoing.Write(Encoding.UTF8.GetBytes(content));
+                _outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
             catch
             {
-                System.Console.WriteLine("Error rewriting presence. Sending the raw value.");
-                outgoing.Write(Encoding.UTF8.GetBytes(content));
+                System.Console.WriteLine(@"Error rewriting presence. Sending the raw value.");
+                _outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
         }
 
         private void UpdateStatus(string newStatus)
         {
-            if (string.IsNullOrEmpty(lastPresence)) return;
+            if (string.IsNullOrEmpty(_lastPresence)) return;
 
-            PossiblyRewriteAndResendPresence(lastPresence, newStatus);
+            PossiblyRewriteAndResendPresence(_lastPresence, newStatus);
             _ws.Close();
             Utils.SendStatusToLcu(newStatus);
-            _ws = Utils.MonitorChatStatusChange(newStatus, enabled);
+            _ws = Utils.MonitorChatStatusChange(newStatus, _enabled);
         }
 
         private void LoadStatus()
         {
-            if (File.Exists(statusFile)) status = File.ReadAllText(statusFile) == "mobile" ? "mobile" : "offline";
-            else status = "offline";
+            if (File.Exists(_statusFile)) _status = File.ReadAllText(_statusFile) == "mobile" ? "mobile" : "offline";
+            else _status = "offline";
         }
 
         private void SaveStatus()
         {
-            File.WriteAllText(statusFile, status);
+            File.WriteAllText(_statusFile, _status);
         }
     }
 }

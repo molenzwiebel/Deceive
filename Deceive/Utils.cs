@@ -15,69 +15,38 @@ using System.Windows.Forms;
 using Deceive.Properties;
 using System.Net.Http;
 using WebSocketSharp;
-using System.Threading.Tasks;
+using YamlDotNet.RepresentationModel;
 
 namespace Deceive
 {
-    class Utils
+    internal static class Utils
     {
-        private static readonly HttpClient HTTP_CLIENT = new HttpClient();
+        private static readonly HttpClient HttpClient = new HttpClient();
 
-        public static readonly string DATA_DIR = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
-        private static readonly Regex AUTH_TOKEN_REGEX = new Regex("\"--remoting-auth-token=(.+?)\"");
-        private static readonly Regex PORT_REGEX = new Regex("\"--app-port=(\\d+?)\"");
-        private static readonly string CONFIG_PATH = Path.Combine(DATA_DIR, "lcuPath");
+        internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
+        private static readonly Regex AuthTokenRegex = new Regex("\"--remoting-auth-token=(.+?)\"");
+        private static readonly Regex PortRegex = new Regex("\"--app-port=(\\d+?)\"");
+        private static readonly string ConfigPath = Path.Combine(DataDir, "lcuPath");
 
         static Utils()
         {
-            if (!Directory.Exists(DATA_DIR)) Directory.CreateDirectory(DATA_DIR);
-        }
-
-        /**
-         * Finds the current region as defined in the local league settings.
-         */
-        public static string GetLCURegion()
-        {
-            var league = GetLCUPath();
-            var config = Path.GetDirectoryName(league) + "/Config/LeagueClientSettings.yaml";
-
-            // If we're unlucky, we read this file while league has it locked. Copy it over so we can read it.
-            var copy = Path.Combine(DATA_DIR, "LeagueClientSettings.yaml");
-            File.Copy(config, copy);
-            var contents = File.ReadAllText(copy);
-            File.Delete(copy);
-
-            var matches = new Regex("region: \"(.+?)\"").Match(contents);
-
-            return matches.Groups[1].Value;
-        }
-
-        /**
-         * Gets the path to the system.yaml file in the current league installation.
-         */
-        public static string GetSystemYamlPath()
-        {
-            var league = GetLCUPath();
-            if (league == null)
-                return null;
-
-            // New patcher has it in the install root.
-            return Path.Combine(Path.GetDirectoryName(league), "system.yaml");
+            if (!Directory.Exists(DataDir)) Directory.CreateDirectory(DataDir);
         }
 
         /**
          * Either gets the LCU path from the saved properties, from registry, or by prompting the user (in case all goes wrong).
+         * SOON NOT NEEDED AS CHAT IS PROXIED TO RIOT CLIENT
          */
-        public static string GetLCUPath()
+        public static string GetLcuPath()
         {
             string path;
             const string initialDirectory = "C:\\Riot Games\\League of Legends";
 
-            if (File.Exists(CONFIG_PATH))
-                path = File.ReadAllText(CONFIG_PATH);
+            if (File.Exists(ConfigPath))
+                path = File.ReadAllText(ConfigPath);
             else
             {
-                object registry = Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends", "Location", "");
+                var registry = Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends", "Location", "");
                 if (registry == null)
                 {
                     path = initialDirectory + "\\LeagueClient.exe";
@@ -88,7 +57,7 @@ namespace Deceive
                 }
             }
 
-            while (!IsValidLCUPath(path))
+            while (!IsValidLcuPath(path))
             {
                 // Notify that the path is invalid.
                 MessageBox.Show(
@@ -120,22 +89,22 @@ namespace Deceive
             }
 
             // Store choice so we don't have to ask for it again.
-            File.WriteAllText(CONFIG_PATH, path);
+            File.WriteAllText(ConfigPath, path);
 
             return path;
         }
 
         /**
-         * Asynchronously checks if the current version of Deceive is the latest version. If not, and the user has
-         * not dismissed the message before, an alert is shown.
+         * Asynchronously checks if the current version of Deceive is the latest version.
+         * If not, and the user has not dismissed the message before, an alert is shown.
          */
         public static async void CheckForUpdates()
         {
             try
             {
-                HTTP_CLIENT.DefaultRequestHeaders.UserAgent.Add(new System.Net.Http.Headers.ProductInfoHeaderValue("Deceive", Resources.DeceiveVersion));
+                HttpClient.DefaultRequestHeaders.UserAgent.Add(new System.Net.Http.Headers.ProductInfoHeaderValue("Deceive", Resources.DeceiveVersion));
 
-                var response = await HTTP_CLIENT.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
+                var response = await HttpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
                 var content = await response.Content.ReadAsStringAsync();
                 dynamic release = SimpleJson.DeserializeObject(content);
                 var latestVersion = release["tag_name"];
@@ -145,7 +114,7 @@ namespace Deceive
                 if (latestVersion == Resources.DeceiveVersion) return;
 
                 // Check if we have shown this before.
-                var persistencePath = Path.Combine(DATA_DIR, "updateVersionPrompted");
+                var persistencePath = Path.Combine(DataDir, "updateVersionPrompted");
                 var latestShownVersion = File.Exists(persistencePath) ? File.ReadAllText(persistencePath) : "";
 
                 // If we have, return.
@@ -176,15 +145,14 @@ namespace Deceive
 
         /**
          * Checks if the provided path is most likely a path where the LCU is installed.
+         * SOON NOT NEEDED AS CHAT IS PROXIED TO RIOT CLIENT
          */
-        private static bool IsValidLCUPath(string path)
+        private static bool IsValidLcuPath(string path)
         {
             try
             {
-                if (string.IsNullOrEmpty(path))
-                    return false;
-
-                string folder = Path.GetDirectoryName(path);
+                if (string.IsNullOrEmpty(path)) return false;
+                var folder = Path.GetDirectoryName(path);
                 return File.Exists(folder + "\\LeagueClient.exe") && Directory.Exists(folder + "\\Config") && File.Exists(folder + "\\system.yaml");
             }
             catch
@@ -193,22 +161,17 @@ namespace Deceive
             }
         }
 
-        private static Process[] GetLeagueProcesses()
-        {
-            Process[] lcuCandidates = Process.GetProcessesByName("LeagueClient");
-            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
-            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
-            return lcuCandidates;
-        }
-
-        public static void InitPathWithRunningLCU()
+        /**
+         * SOON NOT NEEDED AS CHAT IS PROXIED TO RIOT CLIENT
+         */
+        public static void InitPathWithRunningLcu()
         {
             // Find the LeagueClientUx process.
             foreach (var p in GetLeagueProcesses())
             {
                 try
                 {
-                    if (!IsValidLCUPath(p.MainModule.FileName))
+                    if (!IsValidLcuPath(p.MainModule?.FileName))
                         continue;
                 }
                 catch
@@ -240,31 +203,37 @@ namespace Deceive
                     }
                 }
 
-                File.WriteAllText(CONFIG_PATH, p.MainModule.FileName);
+                File.WriteAllText(ConfigPath, p.MainModule?.FileName);
                 return;
             }
         }
+        
+        private static Process[] GetLeagueProcesses()
+        {
+            var lcuCandidates = Process.GetProcessesByName("LeagueClient");
+            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
+            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
+            return lcuCandidates;
+        }
 
-        // Checks if there is a running LCU instance.
-        public static bool IsLCURunning()
+        // Checks if there is a running LCU or RC instance.
+        public static bool IsClientRunning()
         {
             return GetLeagueProcesses().Length > 0 || Process.GetProcessesByName("RiotClientServices").Length > 0;
         }
 
-        // Kills the running LCU instance, if applicable.
-        public static void KillLCU()
+        // Kills the running LCU or RC instance, if applicable.
+        public static void KillClients()
         {
             IEnumerable<Process> candidates = GetLeagueProcesses();
             candidates = candidates.Concat(Process.GetProcessesByName("RiotClientServices"));
 
-            foreach (Process lcu in candidates)
+            foreach (var lcu in candidates)
             {
                 lcu.Refresh();
-                if (!lcu.HasExited)
-                {
-                    lcu.Kill();
-                    lcu.WaitForExit();
-                }
+                if (lcu.HasExited) continue;
+                lcu.Kill();
+                lcu.WaitForExit();
             }
         }
 
@@ -285,11 +254,39 @@ namespace Deceive
 
             return rcPaths.FirstOrDefault(File.Exists);
         }
+        
+        /**
+         * Tries to get path to the system.yaml file for given path.
+         */
+        public static string GetSystemYamlPath(string path)
+        {
+            if (path == null) return null;
+            return File.Exists(Path.Combine(Path.GetDirectoryName(path), "system.yaml")) ? Path.Combine(Path.GetDirectoryName(path), "system.yaml") : null;
+        }
+        
+        /**
+         * Finds the current region as defined in RiotClientSettings.yaml
+         */
+        public static string GetServerRegion()
+        {
+            var riotClientSettings = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Riot Games/Riot Client/Config/RiotClientSettings.yaml");
+
+            // If we're unlucky, we read this file while league has it locked. Copy it over so we can read it.
+            var copy = Path.Combine(DataDir, "RiotClientSettings.yaml");
+            File.Copy(riotClientSettings, copy);
+            var contents = File.ReadAllText(copy);
+            File.Delete(copy);
+            
+            var yaml = new YamlStream();
+            yaml.Load(new StringReader(contents));
+            var root = yaml.Documents[0].RootNode;
+            return root["install"]["globals"]["region"].ToString();
+        }
 
         //Class for storing LCU API port and auth token
         private class LcuApiPortToken
         {
-            public LcuApiPortToken(string port, string token)
+            internal LcuApiPortToken(string port, string token)
             {
                 Port = port;
                 Token = token;
@@ -309,8 +306,9 @@ namespace Deceive
                 var commandLine = (string)objects.Cast<ManagementBaseObject>().SingleOrDefault()?["CommandLine"];
                 try
                 {
-                    var port = PORT_REGEX.Match(commandLine).Groups[1].Value;
-                    var token = AUTH_TOKEN_REGEX.Match(commandLine).Groups[1].Value;
+                    if (commandLine == null) return null;
+                    var port = PortRegex.Match(commandLine).Groups[1].Value;
+                    var token = AuthTokenRegex.Match(commandLine).Groups[1].Value;
                     return new LcuApiPortToken(port, token);
                 }
                 catch (Exception ex)
@@ -364,7 +362,6 @@ namespace Deceive
                     if (!statusJson.ContainsKey("availability")) return;
                     var availability = (string) statusJson["availability"]; 
                     if (availability == "dnd" || availability == status || availability == "away") return;
-                    Trace.WriteLine((string) statusJson["availability"]);
                     SendStatusToLcu(status);
                     if (!enabled) ws.Close();
                 };

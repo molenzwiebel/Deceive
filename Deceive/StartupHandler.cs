@@ -13,12 +13,12 @@ using YamlDotNet.RepresentationModel;
 
 namespace Deceive
 {
-    class StartupHandler
+    internal static class StartupHandler
     {
-        public static string DeceiveTitle => "Deceive " + Resources.DeceiveVersion;
+        internal static string DeceiveTitle => "Deceive " + Resources.DeceiveVersion;
 
         [STAThread]
-        public static void Main(string[] args)
+        private static void Main()
         {
             try
             {
@@ -43,9 +43,9 @@ namespace Deceive
         private static void StartDeceive()
         {
             // We are supposed to launch league, so if it's already running something is going wrong.
-            if (Utils.IsLCURunning())
+            if (Utils.IsClientRunning())
             {
-                Utils.InitPathWithRunningLCU();
+                Utils.InitPathWithRunningLcu();
 
                 var result = MessageBox.Show(
                     "League is currently running. In order to mask your online status, League needs to be started by Deceive. Do you want Deceive to stop League, so that it can restart it with the proper configuration?",
@@ -56,7 +56,7 @@ namespace Deceive
                 );
 
                 if (result != DialogResult.Yes) return;
-                Utils.KillLCU();
+                Utils.KillClients();
                 Thread.Sleep(2000); // Riot Client takes a while to die
             }
 
@@ -70,7 +70,7 @@ namespace Deceive
 
             // Step 2: Find original League system.yaml, patch our localhost proxy in, and save it somewhere.
             // At the same time, also parse the system.yaml to get the original chat server locations.
-            var leagueSystemYamlPath = Utils.GetSystemYamlPath();
+            var leagueSystemYamlPath = Utils.GetSystemYamlPath(Utils.GetLcuPath());
             if (leagueSystemYamlPath == null) // If this is null, it means we canceled something that required manual user input. Just exit.
                 return;
 
@@ -84,11 +84,11 @@ namespace Deceive
             leagueYamlContents = leagueYamlContents.Replace("chat_port: 5223", "chat_port: " + port);
             leagueYamlContents = new Regex("chat_host: .*?\t?\n").Replace(leagueYamlContents, "chat_host: localhost\n");
 
-            // Write this to the league install folder and not the appdata folder.
+            // Write this to the league install folder and not the AppData folder.
             // This is because league segfaults if you give it an override path with unicode characters,
             // such as some users with a special character in their Windows user name may have.
             // We put it in the Config folder since the new patcher will nuke any non-league files in the install root.
-            var leaguePath = Utils.GetLCUPath();
+            var leaguePath = Utils.GetLcuPath();
             var yamlPath = Path.Combine(Path.GetDirectoryName(leaguePath), "Config", "deceive-system.yaml");
             File.WriteAllText(yamlPath, leagueYamlContents);
 
@@ -101,39 +101,28 @@ namespace Deceive
                 MessageBox.Show(
                     "Deceive was unable to find the path to the Riot Launcher. If you have League installed and it is working properly, please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
                     DeceiveTitle,
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error,
                     MessageBoxDefaultButton.Button1
                 );
 
                 return;
             }
 
-            // Step 4: Do a similar change to the Riot Client system.yaml, to patch out the client config.
-            var riotYamlPath = Path.Combine(Path.GetDirectoryName(riotClientPath), "system.yaml");
-            var riotYamlContents = File.ReadAllText(riotYamlPath);
-
-            // Find the old config URL (likely https://clientconfig.rpg.riotgames.com)
+            // Step 4: Find the old config URL and start proxy web server (likely https://clientconfig.rpg.riotgames.com)
+            var riotYamlContents = File.ReadAllText(Utils.GetSystemYamlPath(riotClientPath));
             var riotYaml = new YamlStream();
             riotYaml.Load(new StringReader(riotYamlContents));
-            var root = leagueYaml.Documents[0].RootNode;
+            var root = riotYaml.Documents[0].RootNode;
             var oldConfigUrl = root["region_data"][root["default_region"].ToString()]["servers"]["client_config"]["client_config_url"].ToString();
-
-            // Start a proxy web server and replace the yaml config URL with localhost.
             var proxyServerPort = ConfigProxy.StartConfigProxy(oldConfigUrl, port);
-            riotYamlContents = new Regex("client_config_url: .*?\t?\n").Replace(riotYamlContents, "client_config_url: \"http://localhost:" + proxyServerPort + "\"\n");
 
-            // Write the modified system yaml back. We write it to the league folder since we know it exists.
-            var newRiotYamlPath = Path.Combine(Path.GetDirectoryName(leaguePath), "Config", "deceive-riot-client-system.yaml");
-            File.WriteAllText(newRiotYamlPath, riotYamlContents);
-
-            // Step 5: Start the process and wait for a connect.
+            // Step 5: Start the Riot Client and wait for a connect.
             var startArgs = new ProcessStartInfo
             {
                 FileName = riotClientPath,
-                Arguments = "--system-yaml-override=\"" + newRiotYamlPath + "\" --launch-product=league_of_legends --launch-patchline=live -- --system-yaml-override=\"" + yamlPath + "\""
+                Arguments = "--client-config-url=\"http://localhost:" + proxyServerPort + "\" --launch-product=league_of_legends --launch-patchline=live -- --system-yaml-override=\"" + yamlPath + "\""
             };
-
             Process.Start(startArgs);
             var incoming = listener.AcceptTcpClient();
 
@@ -143,7 +132,9 @@ namespace Deceive
             sslIncoming.AuthenticateAsServer(cert);
 
             // Find the chat information of the original system.yaml for that region.
-            var regionDetails = leagueYaml.Documents[0].RootNode["region_data"][Utils.GetLCURegion()]["servers"]["chat"];
+            // Should use chat server from clientconfig in the future
+            // rnet-stable.chat.si.riotgames.com is the working, but still unused, global chat server
+            var regionDetails = leagueYaml.Documents[0].RootNode["region_data"][Utils.GetServerRegion()]["servers"]["chat"];
             var chatHost = regionDetails["chat_host"].ToString();
             var chatPort = int.Parse(regionDetails["chat_port"].ToString());
 
