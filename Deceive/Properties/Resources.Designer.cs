@@ -81,7 +81,7 @@ namespace Deceive.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to v1.6.1.
+        ///   Looks up a localized string similar to v1.6.2.
         /// </summary>
         internal static string DeceiveVersion {
             get {

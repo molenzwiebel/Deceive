@@ -12,7 +12,7 @@ using EmbedIO.Actions;
 
 namespace Deceive
 {
-    class ConfigProxy
+    internal static class ConfigProxy
     {
         private static readonly HttpClient Client = new HttpClient();
 
@@ -21,7 +21,7 @@ namespace Deceive
          * to point the chat servers to our local setup. This function returns the random port that the HTTP
          * server is listening on.
          */
-        public static int StartConfigProxy(string configUrl, int chatPort)
+        internal static int StartConfigProxy(string configUrl, int chatPort)
         {
             // Find a free port.
             var l = new TcpListener(IPAddress.Loopback, 0);
@@ -38,11 +38,7 @@ namespace Deceive
 
             // Run this on a new thread, just for the sake of it.
             // It seemed to be buggy if run on the same thread.
-            var thread = new Thread(() =>
-            {
-                server.RunAsync().Wait();
-            });
-            thread.IsBackground = true;
+            var thread = new Thread(() => { server.RunAsync().Wait(); }) {IsBackground = true};
             thread.Start();
 
             return port;
@@ -52,7 +48,7 @@ namespace Deceive
          * Proxies any request made to this web server to the clientconfig service. Rewrites the response
          * to have any chat servers point to localhost at the specified port.
          */
-        private async static Task ProxyAndRewriteResponse(string configUrl, int chatPort, IHttpContext ctx)
+        private static async Task ProxyAndRewriteResponse(string configUrl, int chatPort, IHttpContext ctx)
         {
             var url = configUrl + ctx.Request.RawUrl;
 
@@ -92,6 +88,7 @@ namespace Deceive
                     }
 
                     // Set fallback host to localhost.
+                    // aPinat: I think this is not fallback, but host that should be used, since RC queries this for specific region
                     if (configObject.ContainsKey("chat.host"))
                     {
                         configObject["chat.host"] = "127.0.0.1";
