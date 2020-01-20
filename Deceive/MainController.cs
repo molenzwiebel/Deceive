@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
@@ -143,7 +144,7 @@ namespace Deceive
             }
             finally
             {
-                System.Console.WriteLine(@"Incoming closed.");
+                Trace.WriteLine(@"Incoming closed.");
                 SaveStatus();
                 Application.Exit();
             }
@@ -162,11 +163,11 @@ namespace Deceive
                     _incoming.Write(bytes, 0, byteCount);
                 } while (byteCount != 0);
 
-                System.Console.WriteLine(@"Outgoing closed.");
+                Trace.WriteLine(@"Outgoing closed.");
             }
             catch
             {
-                System.Console.WriteLine(@"Outgoing errored.");
+                Trace.WriteLine(@"Outgoing errored.");
                 SaveStatus();
                 Application.Exit();
             }
@@ -186,7 +187,7 @@ namespace Deceive
 
                     if (targetStatus != "chat")
                     {
-                        presence.Element("status")?.Remove(); 
+                        presence.Element("status")?.Remove();
                         presence.Element("games")?.Element("league_of_legends")?.Remove();
                     }
 
@@ -196,7 +197,7 @@ namespace Deceive
             }
             catch
             {
-                System.Console.WriteLine(@"Error rewriting presence. Sending the raw value.");
+                Trace.WriteLine(@"Error rewriting presence. Sending the raw value.");
                 _outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
         }
