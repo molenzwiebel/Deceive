@@ -101,7 +101,6 @@ namespace Deceive
                     var riotChatPort = 0;
 
                     // Set fallback host to localhost.
-                    // aPinat: I think this is not fallback, but host that should be used, since RC queries this for specific region
                     if (configObject.ContainsKey("chat.host"))
                     {
                         riotChatHost = configObject["chat.host"].ToString();

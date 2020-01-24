@@ -57,8 +57,8 @@
     <Reference Include="Microsoft.WindowsAPICodePack.Shell, Version=1.1.0.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\WindowsAPICodePack-Shell.1.1.1\lib\Microsoft.WindowsAPICodePack.Shell.dll</HintPath>
     </Reference>
-    <Reference Include="Swan.Lite, Version=2.4.4.0, Culture=neutral, PublicKeyToken=30c707c872729fff">
-      <HintPath>..\packages\Unosquare.Swan.Lite.2.4.4\lib\netstandard2.0\Swan.Lite.dll</HintPath>
+    <Reference Include="Swan.Lite, Version=2.5.0.0, Culture=neutral, PublicKeyToken=30c707c872729fff">
+      <HintPath>..\packages\Unosquare.Swan.Lite.2.5.0\lib\netstandard2.0\Swan.Lite.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System" />
@@ -121,7 +121,7 @@
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Enable NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105.The missing file is {0}.</ErrorText>
     </PropertyGroup>
     <Error Condition="!Exists('..\packages\Costura.Fody.4.1.0\build\Costura.Fody.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Costura.Fody.4.1.0\build\Costura.Fody.props'))" />
-    <Error Condition="!Exists('..\packages\Fody.6.0.7\build\Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Fody.6.0.7\build\Fody.targets'))" />
+    <Error Condition="!Exists('..\packages\Fody.6.0.8\build\Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Fody.6.0.8\build\Fody.targets'))" />
   </Target>
-  <Import Project="..\packages\Fody.6.0.7\build\Fody.targets" Condition="Exists('..\packages\Fody.6.0.7\build\Fody.targets')" />
+  <Import Project="..\packages\Fody.6.0.8\build\Fody.targets" Condition="Exists('..\packages\Fody.6.0.8\build\Fody.targets')" />
 </Project>
