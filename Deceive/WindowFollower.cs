@@ -12,6 +12,10 @@ namespace Deceive
      */
     public class WindowFollower
     {
+        // These are needed, see the constructor why.
+        private WinEventDelegate _focusChangedCallback;
+        private WinEventDelegate _targetMovedCallback;
+
         private Window _overlay;
         private Process _target;
         private IntPtr _handle;
@@ -21,6 +25,13 @@ namespace Deceive
             _overlay = overlay;
             _target = p;
             _handle = p.MainWindowHandle;
+
+            // If we just use these functions directly, C# will create a closure to capture the current `this`.
+            // We don't want this, since C# will at some point GC this closure while it is still in use and
+            // cause the callbacks to reference invalid memory, causing Deceive to crash. Instead, we can assign
+            // them to a local variable which will prevent them from being GCd while still in use.
+            _focusChangedCallback = FocusChanged;
+            _targetMovedCallback = TargetMoved;
         }
 
         /**
@@ -29,17 +40,17 @@ namespace Deceive
         public void StartFollowing()
         {
             // Listen to moves.
-            SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero, TargetMoved,
+            SetWinEventHook(EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_LOCATIONCHANGE, IntPtr.Zero, _targetMovedCallback,
                 (uint) _target.Id,
                 GetWindowThreadProcessId(_handle, IntPtr.Zero),
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
             // Listen to focus changes.
-            SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, FocusChanged,
+            SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _focusChangedCallback,
                 0,
                 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            
+
             // Manually trigger the focus command to check if we should focus right now.
             FocusChanged(IntPtr.Zero, 0, IntPtr.Zero, 0, 0, 0, 0);
         }

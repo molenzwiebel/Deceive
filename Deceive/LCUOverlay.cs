@@ -147,7 +147,6 @@ namespace Deceive
         {
             base.OnSourceInitialized(e);
             
-            Console.WriteLine("X");
             this.MakeWindowTransparent();
         }
     }
