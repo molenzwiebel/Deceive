@@ -21,6 +21,11 @@ namespace Deceive
         private static readonly Brush OfflineMobileColor = new SolidColorBrush(Color.FromRgb(137, 141, 127));
         private static readonly Brush InactiveColor = new SolidColorBrush(Colors.LimeGreen);
         
+        // 1920x1080 sizes.
+        private static readonly Rect HugeBackgroundRect = new Rect(1692, 72, 180, 41);
+        private static readonly Point HugeTextOrigin = new Point(1697, 75);
+        private static readonly double HugeFontSize = 18.0;
+        
         // 1600x900 sizes.
         private static readonly Rect LargeBackgroundRect = new Rect(1412, 57, 147, 33);
         private static readonly Point LargeTextOrigin = new Point(1414, 60);
@@ -106,7 +111,18 @@ namespace Deceive
             _canvas.Width = Width;
             _canvas.Height = Height;
 
-            if (Width == 1600 && Height == 900)
+            if (Width == 1920 && Height == 1080)
+            {
+                // Huge
+                _textLabel.FontSize = HugeFontSize;
+                Canvas.SetLeft(_textLabel, HugeTextOrigin.X);
+                Canvas.SetTop(_textLabel, HugeTextOrigin.Y);
+
+                _background.Width = HugeBackgroundRect.Width;
+                _background.Height = HugeBackgroundRect.Height;
+                Canvas.SetLeft(_background, HugeBackgroundRect.X);
+                Canvas.SetTop(_background, HugeBackgroundRect.Y);
+            } else if (Width == 1600 && Height == 900)
             {
                 // Large
                 _textLabel.FontSize = LargeFontSize;

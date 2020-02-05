@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Media;
 
 namespace Deceive
 {
@@ -15,6 +16,9 @@ namespace Deceive
         // These are needed, see the constructor why.
         private WinEventDelegate _focusChangedCallback;
         private WinEventDelegate _targetMovedCallback;
+
+        private Matrix _dpiMatrix = new Matrix(1, 1, 1, 1, 1, 1);
+        private bool _hasDpiMatrix;
 
         private Window _overlay;
         private Process _target;
@@ -63,12 +67,14 @@ namespace Deceive
         {
             Rect newLocation = new Rect();
             if (!GetWindowRect(_handle, ref newLocation)) return;
-
+            
+            LoadDpiMatrix();
+            
             _overlay.Show();
-            _overlay.Left = newLocation.Left;
-            _overlay.Top = newLocation.Top;
-            _overlay.Width = newLocation.Right - newLocation.Left;
-            _overlay.Height = newLocation.Bottom - newLocation.Top;
+            _overlay.Left = newLocation.Left / _dpiMatrix.M11;
+            _overlay.Top = newLocation.Top / _dpiMatrix.M22;
+            _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
+            _overlay.Height = (newLocation.Bottom - newLocation.Top) / _dpiMatrix.M22;
         }
 
         /**
@@ -87,6 +93,21 @@ namespace Deceive
             {
                 _overlay.Show();
             }
+        }
+
+        /**
+         * The DPI matrix is not always available. This method will attempt to find
+         * the current DPI matrix, or default to the [1,1,1,1] matrix if not able to.
+         */
+        private void LoadDpiMatrix()
+        {
+            if (_hasDpiMatrix) return;
+
+            var source = PresentationSource.FromVisual(_overlay);
+            if (source?.CompositionTarget == null) return;
+
+            _dpiMatrix = source.CompositionTarget.TransformToDevice;
+            _hasDpiMatrix = true;
         }
 
         private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject,
