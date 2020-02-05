@@ -1,20 +1,16 @@
-﻿using Microsoft.Win32;
-using Microsoft.WindowsAPICodePack.Dialogs;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Management;
-using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
-using System.Security.Authentication;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Deceive.Properties;
-using System.Net.Http;
-using WebSocketSharp;
+using Microsoft.Win32;
+using Microsoft.WindowsAPICodePack.Dialogs;
 using YamlDotNet.RepresentationModel;
 
 namespace Deceive
@@ -23,9 +19,9 @@ namespace Deceive
     {
         private static readonly HttpClient HttpClient = new HttpClient();
 
-        internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
-        private static readonly Regex AuthTokenRegex = new Regex("\"--remoting-auth-token=(.+?)\"");
-        private static readonly Regex PortRegex = new Regex("\"--app-port=(\\d+?)\"");
+        internal static readonly string DataDir =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
+
         private static readonly string ConfigPath = Path.Combine(DataDir, "lcuPath");
 
         static Utils()
@@ -46,7 +42,9 @@ namespace Deceive
                 path = File.ReadAllText(ConfigPath);
             else
             {
-                var registry = Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends", "Location", "");
+                var registry =
+                    Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends",
+                        "Location", "");
                 if (registry == null)
                 {
                     path = initialDirectory + "\\LeagueClient.exe";
@@ -61,7 +59,8 @@ namespace Deceive
             {
                 // Notify that the path is invalid.
                 MessageBox.Show(
-                    "Could not find the League client at " + path + ". Please select the location of 'LeagueClient.exe' manually.",
+                    "Could not find the League client at " + path +
+                    ". Please select the location of 'LeagueClient.exe' manually.",
                     StartupHandler.DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Exclamation
@@ -102,9 +101,11 @@ namespace Deceive
         {
             try
             {
-                HttpClient.DefaultRequestHeaders.UserAgent.Add(new System.Net.Http.Headers.ProductInfoHeaderValue("Deceive", Resources.DeceiveVersion));
+                HttpClient.DefaultRequestHeaders.UserAgent.Add(
+                    new ProductInfoHeaderValue("Deceive", Resources.DeceiveVersion));
 
-                var response = await HttpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
+                var response =
+                    await HttpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
                 var content = await response.Content.ReadAsStringAsync();
                 dynamic release = SimpleJson.DeserializeObject(content);
                 var latestVersion = release["tag_name"];
@@ -153,7 +154,8 @@ namespace Deceive
             {
                 if (string.IsNullOrEmpty(path)) return false;
                 var folder = Path.GetDirectoryName(path);
-                return File.Exists(folder + "\\LeagueClient.exe") && Directory.Exists(folder + "\\Config") && File.Exists(folder + "\\system.yaml");
+                return File.Exists(folder + "\\LeagueClient.exe") && Directory.Exists(folder + "\\Config") &&
+                       File.Exists(folder + "\\system.yaml");
             }
             catch
             {
@@ -194,7 +196,7 @@ namespace Deceive
                             Verb = "runas"
                         };
 
-                        Process.Start(currentProcessInfo);
+                        System.Diagnostics.Process.Start(currentProcessInfo);
                         Environment.Exit(0);
                     }
                     else
@@ -207,7 +209,7 @@ namespace Deceive
                 return;
             }
         }
-        
+
         private static Process[] GetLeagueProcesses()
         {
             var lcuCandidates = Process.GetProcessesByName("LeagueClient");
@@ -242,135 +244,50 @@ namespace Deceive
         public static string GetRiotClientPath()
         {
             // Find the RiotClientInstalls file.
-            var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Riot Games/RiotClientInstalls.json");
+            var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "Riot Games/RiotClientInstalls.json");
             if (!File.Exists(installPath)) return null;
 
-            var data = (JsonObject)SimpleJson.DeserializeObject(File.ReadAllText(installPath));
+            var data = (JsonObject) SimpleJson.DeserializeObject(File.ReadAllText(installPath));
             var rcPaths = new List<string>();
-            
+
             if (data.ContainsKey("rc_default")) rcPaths.Add(data["rc_default"].ToString());
             if (data.ContainsKey("rc_live")) rcPaths.Add(data["rc_live"].ToString());
             if (data.ContainsKey("rc_beta")) rcPaths.Add(data["rc_beta"].ToString());
 
             return rcPaths.FirstOrDefault(File.Exists);
         }
-        
+
         /**
          * Tries to get path to the system.yaml file for given path.
          */
         public static string GetSystemYamlPath(string path)
         {
             if (path == null) return null;
-            return File.Exists(Path.Combine(Path.GetDirectoryName(path), "system.yaml")) ? Path.Combine(Path.GetDirectoryName(path), "system.yaml") : null;
+            return File.Exists(Path.Combine(Path.GetDirectoryName(path), "system.yaml"))
+                ? Path.Combine(Path.GetDirectoryName(path), "system.yaml")
+                : null;
         }
-        
+
         /**
          * Finds the current region as defined in RiotClientSettings.yaml
          */
         public static string GetServerRegion()
         {
-            var riotClientSettings = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Riot Games/Riot Client/Config/RiotClientSettings.yaml");
+            var riotClientSettings =
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "Riot Games/Riot Client/Config/RiotClientSettings.yaml");
 
             // If we're unlucky, we read this file while league has it locked. Copy it over so we can read it.
             var copy = Path.Combine(DataDir, "RiotClientSettings.yaml");
             File.Copy(riotClientSettings, copy);
             var contents = File.ReadAllText(copy);
             File.Delete(copy);
-            
+
             var yaml = new YamlStream();
             yaml.Load(new StringReader(contents));
             var root = yaml.Documents[0].RootNode;
             return root["install"]["globals"]["region"].ToString();
-        }
-
-        //Class for storing LCU API port and auth token
-        private class LcuApiPortToken
-        {
-            internal LcuApiPortToken(string port, string token)
-            {
-                Port = port;
-                Token = token;
-            }
-
-            public string Port { get; }
-
-            public string Token { get; }
-        }
-
-        //Reads LCU API port and auth token from LCU command line
-        private static LcuApiPortToken GetApiPortAndToken(Process process)
-        {
-            using (var searcher = new ManagementObjectSearcher("SELECT CommandLine FROM Win32_Process WHERE ProcessId = " + process.Id))
-            using (var objects = searcher.Get())
-            {
-                var commandLine = (string)objects.Cast<ManagementBaseObject>().SingleOrDefault()?["CommandLine"];
-                try
-                {
-                    if (commandLine == null) return null;
-                    var port = PortRegex.Match(commandLine).Groups[1].Value;
-                    var token = AuthTokenRegex.Match(commandLine).Groups[1].Value;
-                    return new LcuApiPortToken(port, token);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine(ex.Message);
-                }
-            }
-            return null;
-        }
-
-        /*
-         * Sends our masked availability to LCU for display to local player instead of showing normal status.
-         * LCU will only display availability, so still shows 'Creating Normal Game' or 'In Game'.
-         * This happens only locally, since Deceive masks whole presence with 'gameStatus' as 'outOfGame'.
-         * If we passed this (whole presence) too LCU just overrides it.
-         */
-        internal static void SendStatusToLcu(string status)
-        {
-            foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
-            {
-                var apiAuth = GetApiPortAndToken(process);
-                if (apiAuth == null) return;
-                var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes("riot:" + apiAuth.Token));
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                ServicePointManager.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
-                using (var client = new WebClient())
-                {
-                    client.Headers.Add(HttpRequestHeader.Authorization, "Basic " + auth);
-                    var body = "{\"availability\": \"" + status + "\"}";
-                    client.UploadString(new Uri("https://127.0.0.1:" + apiAuth.Port + "/lol-chat/v1/me"), "PUT", body);
-                }
-            }
-        }
-        
-        public static WebSocket MonitorChatStatusChange(string status, bool enabled)
-        {
-            foreach (var process in Process.GetProcessesByName("LeagueClientUx"))
-            {
-                var apiAuth = GetApiPortAndToken(process);
-                if (apiAuth == null) return null;
-                var ws = new WebSocket($"wss://127.0.0.1:{apiAuth.Port}/", "wamp");
-                ws.SetCredentials("riot", apiAuth.Token, true);
-                ws.SslConfiguration.EnabledSslProtocols = SslProtocols.Tls12;
-                ws.SslConfiguration.ServerCertificateValidationCallback = (send, certificate, chain, sslPolicyErrors) => true;
-                ws.OnMessage += (s, e) =>
-                {
-                    if (!e.IsText) return;
-                    var json = (JsonArray) SimpleJson.DeserializeObject(e.Data);
-                    if ((long) json[0] != 8) return;
-                    var statusJson = (JsonObject)((JsonObject) json[2])[0];
-                    if (!statusJson.ContainsKey("availability")) return;
-                    var availability = (string) statusJson["availability"]; 
-                    if (availability == "dnd" || availability == status || availability == "away") return;
-                    SendStatusToLcu(status);
-                    if (!enabled) ws.Close();
-                };
-                ws.Connect();
-                ws.Send("[5, \"OnJsonApiEvent_lol-chat_v1_me\"]");
-                return ws;
-            }
-
-            return null;
         }
     }
 }
