@@ -6,7 +6,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{57D5DA55-A09D-4B14-86BE-A48C4AE65777}</ProjectGuid>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <RootNamespace>Deceive</RootNamespace>
     <AssemblyName>Deceive</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
