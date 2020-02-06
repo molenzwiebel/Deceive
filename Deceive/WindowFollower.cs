@@ -84,13 +84,7 @@ namespace Deceive
             if (!GetWindowRect(_handle, ref newLocation)) return;
             
             LoadDpiMatrix();
-            
-            //Crashes here for some reason...
-            //_overlay.Show();
-            _overlay.Left = newLocation.Left / _dpiMatrix.M11;
-            _overlay.Top = newLocation.Top / _dpiMatrix.M22;
-            _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
-            _overlay.Height = (newLocation.Bottom - newLocation.Top) / _dpiMatrix.M22;
+            MoveOverlay();
         }
 
         /**
@@ -107,17 +101,22 @@ namespace Deceive
             }
             else
             {
-                var newLocation = new Rect();
-                if (!GetWindowRect(_handle, ref newLocation)) return;
-                
-                LoadDpiMatrix();
-                
                 _overlay.Show();
-                _overlay.Left = newLocation.Left / _dpiMatrix.M11;
-                _overlay.Top = newLocation.Top / _dpiMatrix.M22;
-                _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
-                _overlay.Height = (newLocation.Bottom - newLocation.Top) / _dpiMatrix.M22;
+                MoveOverlay();
             }
+        }
+
+        private void MoveOverlay()
+        {
+            var newLocation = new Rect();
+            if (!GetWindowRect(_handle, ref newLocation)) return;
+                
+            LoadDpiMatrix();
+            
+            _overlay.Left = newLocation.Left / _dpiMatrix.M11;
+            _overlay.Top = newLocation.Top / _dpiMatrix.M22;
+            _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
+            _overlay.Height = (newLocation.Bottom - newLocation.Top) / _dpiMatrix.M22;
         }
 
         /**

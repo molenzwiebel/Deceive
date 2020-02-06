@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -40,6 +40,7 @@ namespace Deceive
             var lcu = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
             
             _overlay = new LCUOverlay();
+            _overlay.Show();
             _follower = new WindowFollower(_overlay, lcu);
             _follower.StartFollowing();
             
@@ -122,7 +123,7 @@ namespace Deceive
             try
             {
                 int byteCount;
-                var bytes = new byte[2048];
+                var bytes = new byte[4096];
 
                 do
                 {
@@ -153,7 +154,7 @@ namespace Deceive
             try
             {
                 int byteCount;
-                var bytes = new byte[2048];
+                var bytes = new byte[4096];
 
                 do
                 {
@@ -175,29 +176,37 @@ namespace Deceive
         {
             try
             {
-                var xml = XDocument.Load(new StringReader(content));
+                _lastPresence = content;
+                var wrappedContent = "<xml>" + content + "</xml>";
+                var xml = XDocument.Load(new StringReader(wrappedContent));
 
-                var presence = xml.Element("presence");
-                if (presence != null && presence.Attribute("to") == null)
+                if (xml.Root == null) return;
+                
+                foreach (var presence in xml.Root.Elements())
                 {
-                    _lastPresence = content;
+                    Console.WriteLine(presence);
+                    if (presence.Name != "presence") continue; 
+                    if (presence.Attribute("to") != null) continue;
+                    
                     presence.Element("show").Value = targetStatus;
 
-                    if (targetStatus != "chat")
-                    {
-                        presence.Element("status")?.Remove();
-                        presence.Element("games")?.Element("league_of_legends")?.Remove();
-                    }
+                    if (targetStatus == "chat") continue;
+                    presence.Element("status")?.Remove();
+                    presence.Element("games")?.Element("league_of_legends")?.Remove();
 
-                    content = presence.ToString();
+                    //Remove Legends of Runeterra presence
+                    presence.Element("games")?.Element("bacon")?.Remove();
                 }
-
-                _outgoing.Write(Encoding.UTF8.GetBytes(content));
+                    
+                var xmlOut = string.Join("", xml.Root.Elements().Select(o => o.ToString()));
+                _outgoing.Write(Encoding.UTF8.GetBytes(xmlOut));
+                Console.WriteLine(xmlOut);
             }
             catch
             {
-                Console.WriteLine(@"Error rewriting presence. Sending the raw value.");
-                _outgoing.Write(Encoding.UTF8.GetBytes(content));
+                Console.WriteLine(@"Error rewriting presence.");
+                //Don't send raw value.
+                //_outgoing.Write(Encoding.UTF8.GetBytes(content));
             }
         }
 

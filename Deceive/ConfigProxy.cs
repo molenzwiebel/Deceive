@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
@@ -12,16 +13,25 @@ using EmbedIO.Actions;
 
 namespace Deceive
 {
-    internal static class ConfigProxy
+    internal class ConfigProxy
     {
-        private static readonly HttpClient Client = new HttpClient();
+        private readonly HttpClient _client = new HttpClient();
+        internal int ConfigPort { get; }
+
+        internal event EventHandler<ChatServerEventArgs> PatchedChatServer;
+        
+        internal class ChatServerEventArgs : EventArgs
+        {
+            internal string ChatHost { get; set; }
+            internal int ChatPort { get; set; }
+        }
 
         /**
          * Starts a new client configuration proxy at a random port. The proxy will modify any responses
          * to point the chat servers to our local setup. This function returns the random port that the HTTP
          * server is listening on.
          */
-        internal static int StartConfigProxy(string configUrl, int chatPort)
+        internal ConfigProxy(string configUrl, int chatPort)
         {
             // Find a free port.
             var l = new TcpListener(IPAddress.Loopback, 0);
@@ -41,14 +51,14 @@ namespace Deceive
             var thread = new Thread(() => { server.RunAsync().Wait(); }) {IsBackground = true};
             thread.Start();
 
-            return port;
+            ConfigPort = port;
         }
 
         /**
          * Proxies any request made to this web server to the clientconfig service. Rewrites the response
          * to have any chat servers point to localhost at the specified port.
          */
-        private static async Task ProxyAndRewriteResponse(string configUrl, int chatPort, IHttpContext ctx)
+        private async Task ProxyAndRewriteResponse(string configUrl, int chatPort, IHttpContext ctx)
         {
             var url = configUrl + ctx.Request.RawUrl;
 
@@ -69,7 +79,7 @@ namespace Deceive
                     message.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
                 }
 
-                var result = await Client.SendAsync(message);
+                var result = await _client.SendAsync(message);
                 var content = await result.Content.ReadAsStringAsync();
                 var modifiedContent = content;
 
@@ -87,16 +97,20 @@ namespace Deceive
                         }
                     }
 
+                    string riotChatHost = null;
+                    var riotChatPort = 0;
+
                     // Set fallback host to localhost.
-                    // aPinat: I think this is not fallback, but host that should be used, since RC queries this for specific region
                     if (configObject.ContainsKey("chat.host"))
                     {
+                        riotChatHost = configObject["chat.host"].ToString();
                         configObject["chat.host"] = "127.0.0.1";
                     }
 
                     // Set chat port.
                     if (configObject.ContainsKey("chat.port"))
                     {
+                        riotChatPort = int.Parse(configObject["chat.port"].ToString());
                         configObject["chat.port"] = chatPort;
                     }
 
@@ -107,10 +121,14 @@ namespace Deceive
                     }
 
                     modifiedContent = SimpleJson.SerializeObject(configObject);
+                    
+                    if (riotChatHost != null && riotChatPort != 0) {
+                        PatchedChatServer?.Invoke(this, new ChatServerEventArgs {ChatHost = riotChatHost, ChatPort = riotChatPort});
+                    }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex);
+                    Trace.WriteLine(ex);
 
                     // Show a message instead of failing silently.
                     MessageBox.Show(

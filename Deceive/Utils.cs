@@ -5,13 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Reflection;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Deceive.Properties;
-using Microsoft.Win32;
-using Microsoft.WindowsAPICodePack.Dialogs;
-using YamlDotNet.RepresentationModel;
 
 namespace Deceive
 {
@@ -19,78 +14,11 @@ namespace Deceive
     {
         private static readonly HttpClient HttpClient = new HttpClient();
 
-        internal static readonly string DataDir =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
-
-        private static readonly string ConfigPath = Path.Combine(DataDir, "lcuPath");
+        internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
 
         static Utils()
         {
             if (!Directory.Exists(DataDir)) Directory.CreateDirectory(DataDir);
-        }
-
-        /**
-         * Either gets the LCU path from the saved properties, from registry, or by prompting the user (in case all goes wrong).
-         * SOON NOT NEEDED AS CHAT IS PROXIED TO RIOT CLIENT
-         */
-        public static string GetLcuPath()
-        {
-            string path;
-            const string initialDirectory = "C:\\Riot Games\\League of Legends";
-
-            if (File.Exists(ConfigPath))
-                path = File.ReadAllText(ConfigPath);
-            else
-            {
-                var registry =
-                    Registry.GetValue("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Riot Games, Inc\\League of Legends",
-                        "Location", "");
-                if (registry == null)
-                {
-                    path = initialDirectory + "\\LeagueClient.exe";
-                }
-                else
-                {
-                    path = registry + "\\LeagueClient.exe";
-                }
-            }
-
-            while (!IsValidLcuPath(path))
-            {
-                // Notify that the path is invalid.
-                MessageBox.Show(
-                    "Could not find the League client at " + path +
-                    ". Please select the location of 'LeagueClient.exe' manually.",
-                    StartupHandler.DeceiveTitle,
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation
-                );
-
-                // Ask for new path.
-                CommonOpenFileDialog dialog = new CommonOpenFileDialog
-                {
-                    Title = "Select LeagueClient.exe location.",
-                    InitialDirectory = initialDirectory,
-                    EnsureFileExists = true,
-                    EnsurePathExists = true,
-                    DefaultFileName = "LeagueClient",
-                    DefaultExtension = "exe"
-                };
-                dialog.Filters.Add(new CommonFileDialogFilter("Executables", ".exe"));
-                dialog.Filters.Add(new CommonFileDialogFilter("All Files", ".*"));
-                if (dialog.ShowDialog() == CommonFileDialogResult.Cancel)
-                {
-                    // User wants to cancel. Exit
-                    return null;
-                }
-
-                path = dialog.FileName;
-            }
-
-            // Store choice so we don't have to ask for it again.
-            File.WriteAllText(ConfigPath, path);
-
-            return path;
         }
 
         /**
@@ -144,98 +72,31 @@ namespace Deceive
             }
         }
 
-        /**
-         * Checks if the provided path is most likely a path where the LCU is installed.
-         * SOON NOT NEEDED AS CHAT IS PROXIED TO RIOT CLIENT
-         */
-        private static bool IsValidLcuPath(string path)
+        private static Process[] GetRiotProcesses()
         {
-            try
-            {
-                if (string.IsNullOrEmpty(path)) return false;
-                var folder = Path.GetDirectoryName(path);
-                return File.Exists(folder + "\\LeagueClient.exe") && Directory.Exists(folder + "\\Config") &&
-                       File.Exists(folder + "\\system.yaml");
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        /**
-         * SOON NOT NEEDED AS CHAT IS PROXIED TO RIOT CLIENT
-         */
-        public static void InitPathWithRunningLcu()
-        {
-            // Find the LeagueClientUx process.
-            foreach (var p in GetLeagueProcesses())
-            {
-                try
-                {
-                    if (!IsValidLcuPath(p.MainModule?.FileName))
-                        continue;
-                }
-                catch
-                {
-                    var result = MessageBox.Show(
-                        "League is currently running in admin mode. In order to proceed Deceive also needs to be elevated. Do you want Deceive to restart in admin mode?",
-                        StartupHandler.DeceiveTitle,
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question,
-                        MessageBoxDefaultButton.Button1
-                    );
-
-                    if (result == DialogResult.Yes)
-                    {
-                        var currentProcessInfo = new ProcessStartInfo
-                        {
-                            UseShellExecute = true,
-                            WorkingDirectory = Environment.CurrentDirectory,
-                            FileName = Assembly.GetEntryAssembly().Location,
-                            Verb = "runas"
-                        };
-
-                        System.Diagnostics.Process.Start(currentProcessInfo);
-                        Environment.Exit(0);
-                    }
-                    else
-                    {
-                        Environment.Exit(0);
-                    }
-                }
-
-                File.WriteAllText(ConfigPath, p.MainModule?.FileName);
-                return;
-            }
-        }
-
-        private static Process[] GetLeagueProcesses()
-        {
-            var lcuCandidates = Process.GetProcessesByName("LeagueClient");
-            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
-            lcuCandidates = lcuCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
-            return lcuCandidates;
+            var riotCandidates = Process.GetProcessesByName("LeagueClient");
+            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
+            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
+            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("RiotClientServices")).ToArray();
+            return riotCandidates;
         }
 
         // Checks if there is a running LCU or RC instance.
         public static bool IsClientRunning()
         {
-            return GetLeagueProcesses().Length > 0 || Process.GetProcessesByName("RiotClientServices").Length > 0;
+            return GetRiotProcesses().Length > 0;
         }
 
         // Kills the running LCU or RC instance, if applicable.
         public static void KillClients()
         {
-            IEnumerable<Process> candidates = GetLeagueProcesses();
-            candidates = candidates.Concat(Process.GetProcessesByName("RiotClientServices"));
-
-            foreach (var lcu in candidates)
+            IEnumerable<Process> candidates = GetRiotProcesses();
+            foreach (var process in candidates)
             {
-                lcu.Refresh();
-                if (lcu.HasExited) continue;
-                lcu.Kill();
-                lcu.WaitForExit();
+                process.Refresh();
+                if (process.HasExited) continue;
+                process.Kill();
+                process.WaitForExit();
             }
         }
 
@@ -256,38 +117,6 @@ namespace Deceive
             if (data.ContainsKey("rc_beta")) rcPaths.Add(data["rc_beta"].ToString());
 
             return rcPaths.FirstOrDefault(File.Exists);
-        }
-
-        /**
-         * Tries to get path to the system.yaml file for given path.
-         */
-        public static string GetSystemYamlPath(string path)
-        {
-            if (path == null) return null;
-            return File.Exists(Path.Combine(Path.GetDirectoryName(path), "system.yaml"))
-                ? Path.Combine(Path.GetDirectoryName(path), "system.yaml")
-                : null;
-        }
-
-        /**
-         * Finds the current region as defined in RiotClientSettings.yaml
-         */
-        public static string GetServerRegion()
-        {
-            var riotClientSettings =
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "Riot Games/Riot Client/Config/RiotClientSettings.yaml");
-
-            // If we're unlucky, we read this file while league has it locked. Copy it over so we can read it.
-            var copy = Path.Combine(DataDir, "RiotClientSettings.yaml");
-            File.Copy(riotClientSettings, copy);
-            var contents = File.ReadAllText(copy);
-            File.Delete(copy);
-
-            var yaml = new YamlStream();
-            yaml.Load(new StringReader(contents));
-            var root = yaml.Documents[0].RootNode;
-            return root["install"]["globals"]["region"].ToString();
         }
     }
 }
