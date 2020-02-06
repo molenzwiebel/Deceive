@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Diagnostics;
-using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -8,7 +7,6 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Windows.Forms;
 using Deceive.Properties;
-using YamlDotNet.RepresentationModel;
 
 namespace Deceive
 {
@@ -82,13 +80,8 @@ namespace Deceive
                 return;
             }
 
-            // Step 3: Find the old config URL and start proxy web server (likely https://clientconfig.rpg.riotgames.com)
-            var riotYamlContents = File.ReadAllText(Utils.GetSystemYamlPath(riotClientPath));
-            var riotYaml = new YamlStream();
-            riotYaml.Load(new StringReader(riotYamlContents));
-            var root = riotYaml.Documents[0].RootNode;
-            var oldConfigUrl = root["region_data"][root["default_region"].ToString()]["servers"]["client_config"]["client_config_url"].ToString();
-            var proxyServer = new ConfigProxy(oldConfigUrl, port);
+            // Step 3: Start proxy web server for clientconfig
+            var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
             // Step 4: Start the Riot Client and wait for a connect.
             var startArgs = new ProcessStartInfo

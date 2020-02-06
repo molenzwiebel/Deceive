@@ -5,13 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Reflection;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Deceive.Properties;
-using Microsoft.Win32;
-using Microsoft.WindowsAPICodePack.Dialogs;
-using YamlDotNet.RepresentationModel;
 
 namespace Deceive
 {
@@ -19,10 +14,7 @@ namespace Deceive
     {
         private static readonly HttpClient HttpClient = new HttpClient();
 
-        internal static readonly string DataDir =
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
-
-        private static readonly string ConfigPath = Path.Combine(DataDir, "lcuPath");
+        internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
 
         static Utils()
         {
@@ -125,17 +117,6 @@ namespace Deceive
             if (data.ContainsKey("rc_beta")) rcPaths.Add(data["rc_beta"].ToString());
 
             return rcPaths.FirstOrDefault(File.Exists);
-        }
-
-        /**
-         * Tries to get path to the system.yaml file for given path.
-         */
-        public static string GetSystemYamlPath(string path)
-        {
-            if (path == null) return null;
-            return File.Exists(Path.Combine(Path.GetDirectoryName(path), "system.yaml"))
-                ? Path.Combine(Path.GetDirectoryName(path), "system.yaml")
-                : null;
         }
     }
 }
