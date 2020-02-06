@@ -18,14 +18,14 @@ namespace Deceive
         private string _status;
         private readonly string _statusFile = Path.Combine(Utils.DataDir, "status");
         
-        private LCUOverlay _overlay;
-        private WindowFollower _follower;
+        private LCUOverlay _overlay = null;
+        private WindowFollower _follower = null;
         
         private SslStream _incoming;
         private SslStream _outgoing;
         private string _lastPresence; // we resend this if the state changes
 
-        internal MainController()
+        internal MainController(bool isLeague)
         {
             _trayIcon = new NotifyIcon
             {
@@ -37,12 +37,15 @@ namespace Deceive
             _trayIcon.ShowBalloonTip(5000);
 
             // Create overlay and start following the LCU with it.
-            var lcu = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
+            if (isLeague)
+            {
+                var process = Process.GetProcessesByName("LeagueClientUx").First();
             
-            _overlay = new LCUOverlay();
-            _overlay.Show();
-            _follower = new WindowFollower(_overlay, lcu);
-            _follower.StartFollowing();
+                _overlay = new LCUOverlay();
+                _overlay.Show();
+                _follower = new WindowFollower(_overlay, process);
+                _follower.StartFollowing();
+            }
             
             LoadStatus();
             UpdateUI();
@@ -105,8 +108,7 @@ namespace Deceive
             });
 
             _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, quitMenuItem});
-            
-            _overlay.UpdateStatus(_status, _enabled);
+            _overlay?.UpdateStatus(_status, _enabled);
         }
 
         public void StartThreads(SslStream incoming, SslStream outgoing)

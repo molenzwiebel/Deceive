@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -15,11 +16,11 @@ namespace Deceive
         internal static string DeceiveTitle => "Deceive " + Resources.DeceiveVersion;
 
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
             try
             {
-                StartDeceive();
+                StartDeceive(args);
             }
             catch (Exception ex)
             {
@@ -37,7 +38,7 @@ namespace Deceive
         /**
          * Actual main function. Wrapped into a separate function so we can catch exceptions.
          */
-        private static void StartDeceive()
+        private static void StartDeceive(string[] cmdArgs)
         {
             // We are supposed to launch league, so if it's already running something is going wrong.
             if (Utils.IsClientRunning())
@@ -84,10 +85,12 @@ namespace Deceive
             var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
             // Step 4: Start the Riot Client and wait for a connect.
+            var isLor = cmdArgs.Any(x => x.ToLower() == "lor");
+            var game = isLor ? "bacon" : "league_of_legends";
             var startArgs = new ProcessStartInfo
             {
                 FileName = riotClientPath,
-                Arguments = "--client-config-url=\"http://localhost:" + proxyServer.ConfigPort + "\" --launch-product=league_of_legends --launch-patchline=live"
+                Arguments = "--client-config-url=\"http://localhost:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
             };
             Process.Start(startArgs);
             
@@ -125,7 +128,7 @@ namespace Deceive
             sslOutgoing.AuthenticateAsClient(chatHost);
 
             // Step 7: All sockets are now connected, start tray icon.
-            var mainController = new MainController();
+            var mainController = new MainController(!isLor);
             mainController.StartThreads(sslIncoming, sslOutgoing);
             Application.EnableVisualStyles();
             Application.Run(mainController);
