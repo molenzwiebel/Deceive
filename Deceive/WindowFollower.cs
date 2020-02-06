@@ -54,6 +54,18 @@ namespace Deceive
                 0,
                 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            
+            //Listen to window being unminimized.
+            SetWinEventHook(EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero, _focusChangedCallback,
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+            
+            //Listen to ALT + TAB ending.
+            SetWinEventHook(EVENT_SYSTEM_SWITCHEND, EVENT_SYSTEM_SWITCHEND, IntPtr.Zero, _focusChangedCallback,
+                0,
+                0,
+                WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
             // Manually trigger the focus command to check if we should focus right now.
             FocusChanged(IntPtr.Zero, 0, IntPtr.Zero, 0, 0, 0, 0);
@@ -62,15 +74,19 @@ namespace Deceive
         /**
          * Called when the followed window moves.
          */
-        private void TargetMoved(IntPtr hWinEventHook, uint eventType, IntPtr lParam, int idObject, int idChild,
+        private void TargetMoved(IntPtr hWinEventHook, uint eventType, IntPtr lParam, uint idObject, int idChild,
             uint dwEventThread, uint dwmsEventTime)
         {
-            Rect newLocation = new Rect();
+            //Ignore mouse location changes on window, since window itself does not move.
+            if (idObject == OBJID_CURSOR) return;
+            
+            var newLocation = new Rect();
             if (!GetWindowRect(_handle, ref newLocation)) return;
             
             LoadDpiMatrix();
             
-            _overlay.Show();
+            //Crashes here for some reason...
+            //_overlay.Show();
             _overlay.Left = newLocation.Left / _dpiMatrix.M11;
             _overlay.Top = newLocation.Top / _dpiMatrix.M22;
             _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
@@ -80,7 +96,7 @@ namespace Deceive
         /**
          * Called when the main focused window changes, to hide/show on demand.
          */
-        private void FocusChanged(IntPtr hWinEventHook, uint eventType, IntPtr lParam, int idObject, int idChild,
+        private void FocusChanged(IntPtr hWinEventHook, uint eventType, IntPtr lParam, uint idObject, int idChild,
             uint dwEventThread, uint dwmsEventTime)
         {
             // Check if we should appear or not.
@@ -91,7 +107,16 @@ namespace Deceive
             }
             else
             {
+                var newLocation = new Rect();
+                if (!GetWindowRect(_handle, ref newLocation)) return;
+                
+                LoadDpiMatrix();
+                
                 _overlay.Show();
+                _overlay.Left = newLocation.Left / _dpiMatrix.M11;
+                _overlay.Top = newLocation.Top / _dpiMatrix.M22;
+                _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
+                _overlay.Height = (newLocation.Bottom - newLocation.Top) / _dpiMatrix.M22;
             }
         }
 
@@ -110,7 +135,7 @@ namespace Deceive
             _hasDpiMatrix = true;
         }
 
-        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject,
+        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, uint idObject,
             int idChild, uint dwEventThread, uint dwmsEventTime);
 
         [DllImport("user32.dll")]
@@ -131,6 +156,9 @@ namespace Deceive
         private const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
         private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
         private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
+        private const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
+        private const uint EVENT_SYSTEM_SWITCHEND = 0x0015;
+        private const uint OBJID_CURSOR = 0xFFFFFFF7;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct Rect
