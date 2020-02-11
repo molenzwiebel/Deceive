@@ -1,4 +1,3 @@
-using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -6,6 +5,7 @@ using System.Net.Security;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using System.Xml;
 using System.Xml.Linq;
 using Deceive.Properties;
 
@@ -132,6 +132,8 @@ namespace Deceive
                     byteCount = _incoming.Read(bytes, 0, bytes.Length);
 
                     var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
+                    Debug.WriteLine("FROM LCU: " + content);
+                    
                     // If this is possibly a presence stanza, rewrite it.
                     if (content.Contains("<presence") && _enabled)
                     {
@@ -145,7 +147,7 @@ namespace Deceive
             }
             finally
             {
-                Console.WriteLine(@"Incoming closed.");
+                Trace.WriteLine(@"Incoming closed.");
                 SaveStatus();
                 Application.Exit();
             }
@@ -161,14 +163,15 @@ namespace Deceive
                 do
                 {
                     byteCount = _outgoing.Read(bytes, 0, bytes.Length);
+                    Debug.WriteLine("TO LCU: " + Encoding.UTF8.GetString(bytes, 0, byteCount));
                     _incoming.Write(bytes, 0, byteCount);
                 } while (byteCount != 0);
 
-                Console.WriteLine(@"Outgoing closed.");
+                Trace.WriteLine(@"Outgoing closed.");
             }
             catch
             {
-                Console.WriteLine(@"Outgoing errored.");
+                Trace.WriteLine(@"Outgoing errored.");
                 SaveStatus();
                 Application.Exit();
             }
@@ -183,10 +186,10 @@ namespace Deceive
                 var xml = XDocument.Load(new StringReader(wrappedContent));
 
                 if (xml.Root == null) return;
+                if (xml.Root.HasElements == false) return;
                 
                 foreach (var presence in xml.Root.Elements())
                 {
-                    Console.WriteLine(presence);
                     if (presence.Name != "presence") continue; 
                     if (presence.Attribute("to") != null) continue;
                     
@@ -199,16 +202,22 @@ namespace Deceive
                     //Remove Legends of Runeterra presence
                     presence.Element("games")?.Element("bacon")?.Remove();
                 }
-                    
-                var xmlOut = string.Join("", xml.Root.Elements().Select(o => o.ToString()));
-                _outgoing.Write(Encoding.UTF8.GetBytes(xmlOut));
-                Console.WriteLine(xmlOut);
+                
+                var sb = new StringBuilder();
+                var xws = new XmlWriterSettings {OmitXmlDeclaration = true, Encoding = Encoding.UTF8, ConformanceLevel = ConformanceLevel.Fragment};
+                using (var xw = XmlWriter.Create(sb, xws))
+                {
+                    foreach (var xElement in xml.Root.Elements())
+                    {
+                        xElement.WriteTo(xw);
+                    }
+                }
+                _outgoing.Write(Encoding.UTF8.GetBytes(sb.ToString()));
+                Debug.WriteLine("DECEIVE: " + sb);
             }
             catch
             {
-                Console.WriteLine(@"Error rewriting presence.");
-                //Don't send raw value.
-                //_outgoing.Write(Encoding.UTF8.GetBytes(content));
+                Trace.WriteLine(@"Error rewriting presence.");
             }
         }
 
