@@ -41,7 +41,7 @@ namespace Deceive
 
             // Start a web server that sends everything to ProxyAndRewriteResponse
             var server = new WebServer(o => o
-                    .WithUrlPrefix("http://localhost:" + port)
+                    .WithUrlPrefix("http://127.0.0.1:" + port)
                     .WithMode(HttpListenerMode.EmbedIO))
                 .WithModule(new ActionModule("/", HttpVerbs.Get,
                     ctx => ProxyAndRewriteResponse(configUrl, chatPort, ctx)));

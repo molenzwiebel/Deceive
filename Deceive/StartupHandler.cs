@@ -90,7 +90,7 @@ namespace Deceive
             var startArgs = new ProcessStartInfo
             {
                 FileName = riotClientPath,
-                Arguments = "--client-config-url=\"http://localhost:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
+                Arguments = "--client-config-url=\"http://127.0.0.1:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
             };
             Process.Start(startArgs);
             
