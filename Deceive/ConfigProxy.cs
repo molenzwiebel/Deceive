@@ -82,6 +82,7 @@ namespace Deceive
                 var result = await _client.SendAsync(message);
                 var content = await result.Content.ReadAsStringAsync();
                 var modifiedContent = content;
+                Debug.WriteLine(content);
 
                 try
                 {
