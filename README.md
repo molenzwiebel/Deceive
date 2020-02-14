@@ -4,8 +4,7 @@
 
 # :tophat: Deceive
 Pretend like you aren't actually feeding your ass off in League of Legends. **Deceive** allows you to mask your online status if you use the new League client.
-Once started, Deceive will be a little icon in your notification tray that allows you to manage whether or not you appear as offline or mobile to your friends.  
-
+Once started, Deceive will be a little icon in your notification tray that allows you to manage your LoL presence, whether it be online, offline, or moblie.
 # FAQ
 **Where can I download Deceive?**  
 Click the [Releases](https://github.com/molenzwiebel/Deceive/releases) tab at the top to download the latest version.
