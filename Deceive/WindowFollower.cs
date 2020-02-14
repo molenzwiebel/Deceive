@@ -11,7 +11,7 @@ namespace Deceive
      * window of a different process. This uses event hooking instead of polling
      * to give a very smooth following.
      */
-    public class WindowFollower
+    public class WindowFollower : IDisposable
     {
         // These are needed, see the constructor why.
         private WinEventDelegate _focusChangedCallback;
@@ -23,6 +23,8 @@ namespace Deceive
         private Window _overlay;
         private Process _target;
         private IntPtr _handle;
+
+        private bool _disposed;
 
         public WindowFollower(Window overlay, Process p)
         {
@@ -71,12 +73,20 @@ namespace Deceive
             FocusChanged(IntPtr.Zero, 0, IntPtr.Zero, 0, 0, 0, 0);
         }
 
+        public void Dispose()
+        {
+            _target?.Dispose();
+            _disposed = true;
+        }
+
         /**
          * Called when the followed window moves.
          */
         private void TargetMoved(IntPtr hWinEventHook, uint eventType, IntPtr lParam, uint idObject, int idChild,
             uint dwEventThread, uint dwmsEventTime)
         {
+            if (_disposed) return;
+            
             //Ignore mouse location changes on window, since window itself does not move.
             if (idObject == OBJID_CURSOR) return;
             
@@ -93,6 +103,8 @@ namespace Deceive
         private void FocusChanged(IntPtr hWinEventHook, uint eventType, IntPtr lParam, uint idObject, int idChild,
             uint dwEventThread, uint dwmsEventTime)
         {
+            if (_disposed) return;
+            
             // Check if we should appear or not.
             var foreground = GetForegroundWindow();
             if (foreground == IntPtr.Zero || foreground != _handle)

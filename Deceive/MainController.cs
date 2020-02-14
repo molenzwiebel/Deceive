@@ -37,18 +37,20 @@ namespace Deceive
             _trayIcon.ShowBalloonTip(5000);
 
             // Create overlay and start following the LCU with it.
-            if (isLeague)
-            {
-                var process = Process.GetProcessesByName("LeagueClientUx").First();
-            
-                _overlay = new LCUOverlay();
-                _overlay.Show();
-                _follower = new WindowFollower(_overlay, process);
-                _follower.StartFollowing();
-            }
-            
+            if (isLeague) CreateOverlay();
+
             LoadStatus();
             UpdateUI();
+        }
+
+        private void CreateOverlay()
+        {
+            var process = Process.GetProcessesByName("LeagueClientUx").First();
+
+            _overlay = new LCUOverlay();
+            _overlay.Show();
+            _follower = new WindowFollower(_overlay, process);
+            _follower.StartFollowing();
         }
 
         private void UpdateUI()
@@ -66,6 +68,24 @@ namespace Deceive
             })
             {
                 Checked = _enabled
+            };
+            
+            var overlayMenuItem = new MenuItem("Status Overlay enabled", (a, e) =>
+            {
+                if (_overlay == null)
+                {
+                    CreateOverlay();
+                }
+                else
+                {
+                    _follower.Dispose();
+                    _overlay.Close();
+                    _overlay = null;
+                }
+                UpdateUI();
+            })
+            {
+                Checked = _overlay != null
             };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
@@ -107,7 +127,7 @@ namespace Deceive
                 Application.Exit();
             });
 
-            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, quitMenuItem});
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, overlayMenuItem, typeMenuItem, quitMenuItem});
             _overlay?.UpdateStatus(_status, _enabled);
         }
 
