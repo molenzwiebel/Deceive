@@ -17,6 +17,7 @@ namespace Deceive
         private bool _enabled = true;
         private string _status;
         private readonly string _statusFile = Path.Combine(Utils.DataDir, "status");
+        private bool _connectToMuc = true;
         
         private LCUOverlay _overlay = null;
         private WindowFollower _follower = null;
@@ -87,6 +88,15 @@ namespace Deceive
             {
                 Checked = _overlay != null
             };
+            
+            var mucMenuItem = new MenuItem("Lobby Chat enabled", (a, e) =>
+            {
+                _connectToMuc = !_connectToMuc;
+                UpdateUI();
+            })
+            {
+                Checked = _connectToMuc
+            };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
@@ -127,7 +137,7 @@ namespace Deceive
                 Application.Exit();
             });
 
-            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, overlayMenuItem, typeMenuItem, quitMenuItem});
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, quitMenuItem});
             _overlay?.UpdateStatus(_status, _enabled);
         }
 
@@ -210,8 +220,12 @@ namespace Deceive
                 
                 foreach (var presence in xml.Root.Elements())
                 {
-                    if (presence.Name != "presence") continue; 
-                    if (presence.Attribute("to") != null) continue;
+                    if (presence.Name != "presence") continue;
+                    if (presence.Attribute("to") != null)
+                    {
+                        if (_connectToMuc) continue;
+                        presence.Remove();
+                    };
                     
                     presence.Element("show").Value = targetStatus;
 
