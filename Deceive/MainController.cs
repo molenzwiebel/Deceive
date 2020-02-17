@@ -71,7 +71,7 @@ namespace Deceive
                 Checked = _enabled
             };
             
-            var overlayMenuItem = new MenuItem("Status Overlay enabled", (a, e) =>
+            var overlayMenuItem = new MenuItem("Show status overlay", (a, e) =>
             {
                 if (_overlay == null)
                 {
@@ -89,7 +89,7 @@ namespace Deceive
                 Checked = _overlay != null
             };
             
-            var mucMenuItem = new MenuItem("Lobby Chat enabled", (a, e) =>
+            var mucMenuItem = new MenuItem("Enable lobby chat", (a, e) =>
             {
                 _connectToMuc = !_connectToMuc;
                 UpdateUI();
