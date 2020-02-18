@@ -13,7 +13,7 @@ namespace Deceive
 {
     internal static class StartupHandler
     {
-        internal static string DeceiveTitle => "Deceive " + Resources.DeceiveVersion;
+        internal static string DeceiveTitle => "Deceive " + Utils.DeceiveVersion;
 
         [STAThread]
         private static void Main(string[] args)
