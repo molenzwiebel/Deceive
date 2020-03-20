@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 
 namespace Deceive
@@ -21,7 +22,9 @@ namespace Deceive
         private bool _hasDpiMatrix;
 
         private Window _overlay;
+        private IntPtr _overlayHandle;
         private Process _target;
+        private Rect _targetPosition;
         private IntPtr _handle;
 
         public WindowFollower(Window overlay, Process p)
@@ -29,6 +32,8 @@ namespace Deceive
             _overlay = overlay;
             _target = p;
             _handle = p.MainWindowHandle;
+            _overlayHandle = new WindowInteropHelper(_overlay).Handle;
+            GetWindowRect(_handle, ref _targetPosition); // get initial window position
 
             // If we just use these functions directly, C# will create a closure to capture the current `this`.
             // We don't want this, since C# will at some point GC this closure while it is still in use and
@@ -54,14 +59,14 @@ namespace Deceive
                 0,
                 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            
-            //Listen to window being unminimized.
+
+            // Listen to window being unminimized.
             SetWinEventHook(EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero, _focusChangedCallback,
                 0,
                 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            
-            //Listen to ALT + TAB ending.
+
+            // Listen to ALT + TAB ending.
             SetWinEventHook(EVENT_SYSTEM_SWITCHEND, EVENT_SYSTEM_SWITCHEND, IntPtr.Zero, _focusChangedCallback,
                 0,
                 0,
@@ -77,20 +82,17 @@ namespace Deceive
         private void TargetMoved(IntPtr hWinEventHook, uint eventType, IntPtr lParam, uint idObject, int idChild,
             uint dwEventThread, uint dwmsEventTime)
         {
-            //Ignore mouse location changes on window, since window itself does not move.
+            // Ignore mouse location changes on window, since window itself does not move.
             if (idObject == OBJID_CURSOR) return;
-            
-            var newLocation = new Rect();
-            if (!GetWindowRect(_handle, ref newLocation)) return;
-            
+
+            if (!GetWindowRect(_handle, ref _targetPosition)) return;
+
             LoadDpiMatrix();
             
-            //Crashes here for some reason...
-            //_overlay.Show();
-            _overlay.Left = newLocation.Left / _dpiMatrix.M11;
-            _overlay.Top = newLocation.Top / _dpiMatrix.M22;
-            _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
-            _overlay.Height = (newLocation.Bottom - newLocation.Top) / _dpiMatrix.M22;
+            _overlay.Left = _targetPosition.Left / _dpiMatrix.M11;
+            _overlay.Top = _targetPosition.Top / _dpiMatrix.M22;
+            _overlay.Width = (_targetPosition.Right - _targetPosition.Left) / _dpiMatrix.M11;
+            _overlay.Height = (_targetPosition.Bottom - _targetPosition.Top) / _dpiMatrix.M22;
         }
 
         /**
@@ -103,20 +105,23 @@ namespace Deceive
             var foreground = GetForegroundWindow();
             if (foreground == IntPtr.Zero || foreground != _handle)
             {
-                _overlay.Hide();
+                _overlay.Topmost = false;
+
+                // Make sure that the new window is higher in the z position than us.
+                SetWindowPos(foreground, _overlayHandle, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
             }
             else
             {
-                var newLocation = new Rect();
-                if (!GetWindowRect(_handle, ref newLocation)) return;
-                
+                if (!GetWindowRect(_handle, ref _targetPosition)) return;
+
                 LoadDpiMatrix();
-                
+
                 _overlay.Show();
-                _overlay.Left = newLocation.Left / _dpiMatrix.M11;
-                _overlay.Top = newLocation.Top / _dpiMatrix.M22;
-                _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;
-                _overlay.Height = (newLocation.Bottom - newLocation.Top) / _dpiMatrix.M22;
+                _overlay.Topmost = true;
+                _overlay.Left = _targetPosition.Left / _dpiMatrix.M11;
+                _overlay.Top = _targetPosition.Top / _dpiMatrix.M22;
+                _overlay.Width = (_targetPosition.Right - _targetPosition.Left) / _dpiMatrix.M11;
+                _overlay.Height = (_targetPosition.Bottom - _targetPosition.Top) / _dpiMatrix.M22;
             }
         }
 
@@ -152,6 +157,10 @@ namespace Deceive
         [DllImport("user32.dll", CharSet = CharSet.Auto, ExactSpelling = true)]
         private static extern IntPtr GetForegroundWindow();
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy,
+            uint uFlags);
+
         private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
         private const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
         private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
@@ -159,6 +168,8 @@ namespace Deceive
         private const uint EVENT_SYSTEM_MINIMIZEEND = 0x0017;
         private const uint EVENT_SYSTEM_SWITCHEND = 0x0015;
         private const uint OBJID_CURSOR = 0xFFFFFFF7;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
 
         [StructLayout(LayoutKind.Sequential)]
         private struct Rect
