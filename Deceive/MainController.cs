@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -18,10 +19,10 @@ namespace Deceive
         private string _status;
         private readonly string _statusFile = Path.Combine(Utils.DataDir, "status");
         private bool _connectToMuc = true;
-        
+
         private LCUOverlay _overlay = null;
         private WindowFollower _follower = null;
-        
+
         private SslStream _incoming;
         private SslStream _outgoing;
         private string _lastPresence; // we resend this if the state changes
@@ -70,7 +71,7 @@ namespace Deceive
             {
                 Checked = _enabled
             };
-            
+
             var overlayMenuItem = new MenuItem("Show status overlay", (a, e) =>
             {
                 if (_overlay == null)
@@ -83,12 +84,13 @@ namespace Deceive
                     _overlay.Close();
                     _overlay = null;
                 }
+
                 UpdateUI();
             })
             {
                 Checked = _overlay != null
             };
-            
+
             var mucMenuItem = new MenuItem("Enable lobby chat", (a, e) =>
             {
                 _connectToMuc = !_connectToMuc;
@@ -162,8 +164,8 @@ namespace Deceive
                     byteCount = _incoming.Read(bytes, 0, bytes.Length);
 
                     var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
-                    Debug.WriteLine("FROM LCU: " + content);
-                    
+                    Debug.WriteLine("FROM RC: " + content);
+
                     // If this is possibly a presence stanza, rewrite it.
                     if (content.Contains("<presence") && _enabled)
                     {
@@ -174,6 +176,10 @@ namespace Deceive
                         _outgoing.Write(bytes, 0, byteCount);
                     }
                 } while (byteCount != 0);
+            }
+            catch (Exception e)
+            {
+                Trace.WriteLine(e);
             }
             finally
             {
@@ -193,14 +199,15 @@ namespace Deceive
                 do
                 {
                     byteCount = _outgoing.Read(bytes, 0, bytes.Length);
-                    Debug.WriteLine("TO LCU: " + Encoding.UTF8.GetString(bytes, 0, byteCount));
+                    Debug.WriteLine("TO RC: " + Encoding.UTF8.GetString(bytes, 0, byteCount));
                     _incoming.Write(bytes, 0, byteCount);
                 } while (byteCount != 0);
 
                 Trace.WriteLine(@"Outgoing closed.");
             }
-            catch
+            catch (Exception e)
             {
+                Trace.WriteLine(e);
                 Trace.WriteLine(@"Outgoing errored.");
                 SaveStatus();
                 Application.Exit();
@@ -217,7 +224,7 @@ namespace Deceive
 
                 if (xml.Root == null) return;
                 if (xml.Root.HasElements == false) return;
-                
+
                 foreach (var presence in xml.Root.Elements())
                 {
                     if (presence.Name != "presence") continue;
@@ -225,8 +232,7 @@ namespace Deceive
                     {
                         if (_connectToMuc) continue;
                         presence.Remove();
-                    };
-                    
+                    }
                     presence.Element("show").Value = targetStatus;
 
                     if (targetStatus == "chat") continue;
@@ -236,7 +242,7 @@ namespace Deceive
                     //Remove Legends of Runeterra presence
                     presence.Element("games")?.Element("bacon")?.Remove();
                 }
-                
+
                 var sb = new StringBuilder();
                 var xws = new XmlWriterSettings {OmitXmlDeclaration = true, Encoding = Encoding.UTF8, ConformanceLevel = ConformanceLevel.Fragment};
                 using (var xw = XmlWriter.Create(sb, xws))
@@ -246,11 +252,13 @@ namespace Deceive
                         xElement.WriteTo(xw);
                     }
                 }
+
                 _outgoing.Write(Encoding.UTF8.GetBytes(sb.ToString()));
                 Debug.WriteLine("DECEIVE: " + sb);
             }
-            catch
+            catch (Exception e)
             {
+                Trace.WriteLine(e);
                 Trace.WriteLine(@"Error rewriting presence.");
             }
         }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -24,6 +25,7 @@ namespace Deceive
             }
             catch (Exception ex)
             {
+                Trace.WriteLine(ex);
                 // Show some kind of message so that Deceive doesn't just disappear.
                 MessageBox.Show(
                     "Deceive encountered an error and couldn't properly initialize itself. Please contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord.\n\n" + ex,
@@ -40,6 +42,11 @@ namespace Deceive
          */
         private static void StartDeceive(string[] cmdArgs)
         {
+            File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
+            var traceListener = new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log"));
+            Debug.Listeners.Add(traceListener);
+            Debug.AutoFlush = true;
+
             // We are supposed to launch league, so if it's already running something is going wrong.
             if (Utils.IsClientRunning())
             {
