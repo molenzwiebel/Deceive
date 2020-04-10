@@ -241,6 +241,9 @@ namespace Deceive
 
                     //Remove Legends of Runeterra presence
                     presence.Element("games")?.Element("bacon")?.Remove();
+                    
+                    //Remove VALORANT presence
+                    presence.Element("games")?.Element("valorant")?.Remove();
                 }
 
                 var sb = new StringBuilder();

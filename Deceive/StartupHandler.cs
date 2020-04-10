@@ -69,7 +69,7 @@ namespace Deceive
             // Step 1: Open a port for our chat proxy, so we can patch chat port into clientconfig.
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            var port = ((IPEndPoint) listener.LocalEndpoint).Port;
 
             // Step 2: Find the Riot Client.
             var riotClientPath = Utils.GetRiotClientPath();
@@ -92,15 +92,27 @@ namespace Deceive
             var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
             // Step 4: Start the Riot Client and wait for a connect.
-            var isLor = cmdArgs.Any(x => x.ToLower() == "lor");
-            var game = isLor ? "bacon" : "league_of_legends";
+            var isLoL = true;
+            var game = "league_of_legends";
+            if (cmdArgs.Any(x => x.ToLower() == "lor"))
+            {
+                isLoL = false;
+                game = "bacon";
+            }
+
+            if (cmdArgs.Any(x => x.ToLower() == "valorant"))
+            {
+                isLoL = false;
+                game = "valorant";
+            }
+
             var startArgs = new ProcessStartInfo
             {
                 FileName = riotClientPath,
                 Arguments = "--client-config-url=\"http://127.0.0.1:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
             };
             Process.Start(startArgs);
-            
+
             // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
             string chatHost = null;
             var chatPort = 0;
@@ -109,14 +121,14 @@ namespace Deceive
                 chatHost = args.ChatHost;
                 chatPort = args.ChatPort;
             };
-            
+
             var incoming = listener.AcceptTcpClient();
-                
+
             // Step 6: Connect sockets.
             var sslIncoming = new SslStream(incoming.GetStream());
             var cert = new X509Certificate2(Resources.certificates);
             sslIncoming.AuthenticateAsServer(cert);
-            
+
             if (chatHost == null)
             {
                 MessageBox.Show(
@@ -129,13 +141,13 @@ namespace Deceive
 
                 return;
             }
-            
+
             var outgoing = new TcpClient(chatHost, chatPort);
             var sslOutgoing = new SslStream(outgoing.GetStream());
             sslOutgoing.AuthenticateAsClient(chatHost);
 
             // Step 7: All sockets are now connected, start tray icon.
-            var mainController = new MainController(!isLor);
+            var mainController = new MainController(isLoL);
             mainController.StartThreads(sslIncoming, sslOutgoing);
             Application.EnableVisualStyles();
             Application.Run(mainController);
