@@ -17,6 +17,7 @@ namespace Deceive
         private bool _enabled = true;
         private string _status;
         private readonly string _statusFile = Path.Combine(Utils.DataDir, "status");
+        private bool _connectToMuc = true;
         
         private LCUOverlay _overlay = null;
         private WindowFollower _follower = null;
@@ -37,18 +38,20 @@ namespace Deceive
             _trayIcon.ShowBalloonTip(5000);
 
             // Create overlay and start following the LCU with it.
-            if (isLeague)
-            {
-                var process = Process.GetProcessesByName("LeagueClientUx").First();
-            
-                _overlay = new LCUOverlay();
-                _overlay.Show();
-                _follower = new WindowFollower(_overlay, process);
-                _follower.StartFollowing();
-            }
-            
+            if (isLeague) CreateOverlay();
+
             LoadStatus();
             UpdateUI();
+        }
+
+        private void CreateOverlay()
+        {
+            var process = Process.GetProcessesByName("LeagueClientUx").First();
+
+            _overlay = new LCUOverlay();
+            _overlay.Show();
+            _follower = new WindowFollower(_overlay, process);
+            _follower.StartFollowing();
         }
 
         private void UpdateUI()
@@ -66,6 +69,33 @@ namespace Deceive
             })
             {
                 Checked = _enabled
+            };
+            
+            var overlayMenuItem = new MenuItem("Show status overlay", (a, e) =>
+            {
+                if (_overlay == null)
+                {
+                    CreateOverlay();
+                }
+                else
+                {
+                    _follower.Dispose();
+                    _overlay.Close();
+                    _overlay = null;
+                }
+                UpdateUI();
+            })
+            {
+                Checked = _overlay != null
+            };
+            
+            var mucMenuItem = new MenuItem("Enable lobby chat", (a, e) =>
+            {
+                _connectToMuc = !_connectToMuc;
+                UpdateUI();
+            })
+            {
+                Checked = _connectToMuc
             };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
@@ -107,7 +137,7 @@ namespace Deceive
                 Application.Exit();
             });
 
-            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, quitMenuItem});
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, quitMenuItem});
             _overlay?.UpdateStatus(_status, _enabled);
         }
 
@@ -190,8 +220,12 @@ namespace Deceive
                 
                 foreach (var presence in xml.Root.Elements())
                 {
-                    if (presence.Name != "presence") continue; 
-                    if (presence.Attribute("to") != null) continue;
+                    if (presence.Name != "presence") continue;
+                    if (presence.Attribute("to") != null)
+                    {
+                        if (_connectToMuc) continue;
+                        presence.Remove();
+                    };
                     
                     presence.Element("show").Value = targetStatus;
 
