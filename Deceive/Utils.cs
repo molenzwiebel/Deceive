@@ -12,17 +12,17 @@ namespace Deceive
 {
     internal static class Utils
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
-
         internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
-        internal static string DeceiveVersion {
+
+        internal static string DeceiveVersion
+        {
             get
             {
                 var version = Assembly.GetEntryAssembly()?.GetName().Version;
                 return "v" + version.Major + "." + version.Minor + "." + version.Build;
             }
         }
-        
+
         static Utils()
         {
             if (!Directory.Exists(DataDir)) Directory.CreateDirectory(DataDir);
@@ -36,11 +36,12 @@ namespace Deceive
         {
             try
             {
-                HttpClient.DefaultRequestHeaders.UserAgent.Add(
+                var httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.UserAgent.Add(
                     new ProductInfoHeaderValue("Deceive", DeceiveVersion));
 
                 var response =
-                    await HttpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
+                    await httpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
                 var content = await response.Content.ReadAsStringAsync();
                 dynamic release = SimpleJson.DeserializeObject(content);
                 string latestVersion = release["tag_name"];
@@ -85,8 +86,8 @@ namespace Deceive
         private static Process[] GetRiotProcesses()
         {
             var riotCandidates = Process.GetProcessesByName("LeagueClient");
-            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
-            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
+            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LoR")).ToArray();
+            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("VALORANT-Win64-Shipping")).ToArray();
             riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("RiotClientServices")).ToArray();
             return riotCandidates;
         }

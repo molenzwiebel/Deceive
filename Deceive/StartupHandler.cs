@@ -111,7 +111,7 @@ namespace Deceive
                 FileName = riotClientPath,
                 Arguments = "--client-config-url=\"http://127.0.0.1:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
             };
-            Process.Start(startArgs);
+            var riotClient = Process.Start(startArgs);
 
             // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
             string chatHost = null;
@@ -151,6 +151,10 @@ namespace Deceive
             mainController.StartThreads(sslIncoming, sslOutgoing);
             Application.EnableVisualStyles();
             Application.Run(mainController);
+
+            // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
+            riotClient?.WaitForExit();
+            Environment.Exit(0);
         }
     }
 }

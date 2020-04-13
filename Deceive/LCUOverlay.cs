@@ -18,22 +18,22 @@ namespace Deceive
 
         private static readonly Brush OfflineMobileColor = new SolidColorBrush(Color.FromRgb(137, 141, 127));
         private static readonly Brush InactiveColor = new SolidColorBrush(Colors.LimeGreen);
-        
+
         // 1920x1080 sizes.
         private static readonly Rect HugeBackgroundRect = new Rect(1692, 72, 180, 41);
         private static readonly Point HugeTextOrigin = new Point(1697, 75);
         private static readonly double HugeFontSize = 18.0;
-        
+
         // 1600x900 sizes.
         private static readonly Rect LargeBackgroundRect = new Rect(1412, 57, 147, 33);
         private static readonly Point LargeTextOrigin = new Point(1414, 60);
         private static readonly double LargeFontSize = 16.0;
-        
+
         // 1280x720 sizes.
         private static readonly Rect MediumBackgroundRect = new Rect(1129, 46, 121, 28);
         private static readonly Point MediumTextOrigin = new Point(1130, 48);
         private static readonly double MediumFontSize = 12.0;
-        
+
         // 1024x576 sizes.
         private static readonly Rect SmallBackgroundRect = new Rect(904, 38, 93, 19);
         private static readonly Point SmallTextOrigin = new Point(903, 38);
@@ -42,7 +42,7 @@ namespace Deceive
         private Canvas _canvas;
         private Label _textLabel;
         private Canvas _background;
-        
+
         public LCUOverlay()
         {
             // Set up main window.
@@ -87,7 +87,7 @@ namespace Deceive
         {
             var content = "";
             var color = OfflineMobileColor;
-            
+
             if (!enabled)
             {
                 content = "Online (No Deceive)";
@@ -120,7 +120,8 @@ namespace Deceive
                 _background.Height = HugeBackgroundRect.Height;
                 Canvas.SetLeft(_background, HugeBackgroundRect.X);
                 Canvas.SetTop(_background, HugeBackgroundRect.Y);
-            } else if (Width == 1600 && Height == 900)
+            }
+            else if (Width == 1600 && Height == 900)
             {
                 // Large
                 _textLabel.FontSize = LargeFontSize;
@@ -131,7 +132,8 @@ namespace Deceive
                 _background.Height = LargeBackgroundRect.Height;
                 Canvas.SetLeft(_background, LargeBackgroundRect.X);
                 Canvas.SetTop(_background, LargeBackgroundRect.Y);
-            } else if (Width == 1280 && Height == 720)
+            }
+            else if (Width == 1280 && Height == 720)
             {
                 // Medium
                 _textLabel.FontSize = MediumFontSize;
@@ -160,7 +162,7 @@ namespace Deceive
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            
+
             this.MakeWindowTransparent();
         }
     }

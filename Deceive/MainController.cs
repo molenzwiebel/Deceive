@@ -233,7 +233,8 @@ namespace Deceive
                         if (_connectToMuc) continue;
                         presence.Remove();
                     }
-                    presence.Element("show").Value = targetStatus;
+
+                    presence.Element("show")?.ReplaceNodes(targetStatus);
 
                     if (targetStatus == "chat") continue;
                     presence.Element("status")?.Remove();
@@ -241,7 +242,7 @@ namespace Deceive
 
                     //Remove Legends of Runeterra presence
                     presence.Element("games")?.Element("bacon")?.Remove();
-                    
+
                     //Remove VALORANT presence
                     presence.Element("games")?.Element("valorant")?.Remove();
                 }

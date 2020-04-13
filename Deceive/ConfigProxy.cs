@@ -19,7 +19,7 @@ namespace Deceive
         internal int ConfigPort { get; }
 
         internal event EventHandler<ChatServerEventArgs> PatchedChatServer;
-        
+
         internal class ChatServerEventArgs : EventArgs
         {
             internal string ChatHost { get; set; }
@@ -122,8 +122,9 @@ namespace Deceive
                     }
 
                     modifiedContent = SimpleJson.SerializeObject(configObject);
-                    
-                    if (riotChatHost != null && riotChatPort != 0) {
+
+                    if (riotChatHost != null && riotChatPort != 0)
+                    {
                         PatchedChatServer?.Invoke(this, new ChatServerEventArgs {ChatHost = riotChatHost, ChatPort = riotChatPort});
                     }
                 }
