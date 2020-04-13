@@ -79,14 +79,5 @@ namespace Deceive.Properties {
                 return ((System.Drawing.Icon)(obj));
             }
         }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to v1.7.1.
-        /// </summary>
-        internal static string DeceiveVersion {
-            get {
-                return ResourceManager.GetString("DeceiveVersion", resourceCulture);
-            }
-        }
     }
 }
