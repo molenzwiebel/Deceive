@@ -238,7 +238,17 @@ namespace Deceive
 
                     if (targetStatus == "chat") continue;
                     presence.Element("status")?.Remove();
-                    presence.Element("games")?.Element("league_of_legends")?.Remove();
+
+                    if (targetStatus == "mobile")
+                    {
+                        presence.Element("games")?.Element("league_of_legends")?.Element("p")?.Remove();
+                        presence.Element("games")?.Element("league_of_legends")?.Element("m")?.Remove();
+                        presence.Element("games")?.Element("league_of_legends")?.Element("st")?.ReplaceNodes(targetStatus);
+                    }
+                    else
+                    {
+                        presence.Element("games")?.Element("league_of_legends")?.Remove();
+                    }
 
                     //Remove Legends of Runeterra presence
                     presence.Element("games")?.Element("bacon")?.Remove();
