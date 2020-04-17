@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Security;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Linq;
@@ -27,7 +28,7 @@ namespace Deceive
         private SslStream _outgoing;
         private string _lastPresence; // we resend this if the state changes
 
-        internal MainController(bool isLeague)
+        internal MainController(bool createOverlay)
         {
             _trayIcon = new NotifyIcon
             {
@@ -39,20 +40,29 @@ namespace Deceive
             _trayIcon.ShowBalloonTip(5000);
 
             // Create overlay and start following the LCU with it.
-            if (isLeague) CreateOverlay();
+            if (createOverlay) CreateOverlay();
 
             LoadStatus();
             UpdateUI();
         }
 
-        private void CreateOverlay()
+        private async void CreateOverlay()
         {
-            var process = Process.GetProcessesByName("LeagueClientUx").First();
+            while (true)
+            {
+                var process = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
+                if (process == null)
+                {
+                    await Task.Delay(5000);
+                    continue;
+                }
 
-            _overlay = new LCUOverlay();
-            _overlay.Show();
-            _follower = new WindowFollower(_overlay, process);
-            _follower.StartFollowing();
+                _overlay = new LCUOverlay();
+                _overlay.Show();
+                _follower = new WindowFollower(_overlay, process);
+                _follower.StartFollowing();
+                return;
+            }
         }
 
         private void UpdateUI()
