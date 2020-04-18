@@ -5,16 +5,23 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Windows.Forms;
-using Deceive.Properties;
 
 namespace Deceive
 {
     internal static class Utils
     {
-        private static readonly HttpClient HttpClient = new HttpClient();
-
         internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
+
+        internal static string DeceiveVersion
+        {
+            get
+            {
+                var version = Assembly.GetEntryAssembly()?.GetName().Version;
+                return "v" + version.Major + "." + version.Minor + "." + version.Build;
+            }
+        }
 
         static Utils()
         {
@@ -29,18 +36,22 @@ namespace Deceive
         {
             try
             {
-                HttpClient.DefaultRequestHeaders.UserAgent.Add(
-                    new ProductInfoHeaderValue("Deceive", Resources.DeceiveVersion));
+                var httpClient = new HttpClient();
+                httpClient.DefaultRequestHeaders.UserAgent.Add(
+                    new ProductInfoHeaderValue("Deceive", DeceiveVersion));
 
                 var response =
-                    await HttpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
+                    await httpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
                 var content = await response.Content.ReadAsStringAsync();
                 dynamic release = SimpleJson.DeserializeObject(content);
-                var latestVersion = release["tag_name"];
+                string latestVersion = release["tag_name"];
 
-                // If failed to fetch or already latest, return.
+                // If failed to fetch or already latest or newer, return.
                 if (latestVersion == null) return;
-                if (latestVersion == Resources.DeceiveVersion) return;
+                var githubVersion = new Version(latestVersion.Replace("v", ""));
+                var assemblyVersion = new Version(DeceiveVersion.Replace("v", ""));
+                // Earlier = -1, Same = 0, Later = 1
+                if (assemblyVersion.CompareTo(githubVersion) != -1) return;
 
                 // Check if we have shown this before.
                 var persistencePath = Path.Combine(DataDir, "updateVersionPrompted");
@@ -53,7 +64,7 @@ namespace Deceive
                 File.WriteAllText(persistencePath, latestVersion);
 
                 var result = MessageBox.Show(
-                    $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {Resources.DeceiveVersion}. Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\nPress OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
+                    $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\nPress OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
                     StartupHandler.DeceiveTitle,
                     MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Information,
@@ -75,8 +86,8 @@ namespace Deceive
         private static Process[] GetRiotProcesses()
         {
             var riotCandidates = Process.GetProcessesByName("LeagueClient");
-            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LeagueClientUx")).ToArray();
-            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LeagueClientUxRender")).ToArray();
+            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LoR")).ToArray();
+            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("VALORANT-Win64-Shipping")).ToArray();
             riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("RiotClientServices")).ToArray();
             return riotCandidates;
         }

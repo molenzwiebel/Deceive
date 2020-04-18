@@ -11,7 +11,7 @@ namespace Deceive
      * window of a different process. This uses event hooking instead of polling
      * to give a very smooth following.
      */
-    public class WindowFollower
+    public class WindowFollower : IDisposable
     {
         // These are needed, see the constructor why.
         private WinEventDelegate _focusChangedCallback;
@@ -23,6 +23,8 @@ namespace Deceive
         private Window _overlay;
         private Process _target;
         private IntPtr _handle;
+
+        private bool _disposed;
 
         public WindowFollower(Window overlay, Process p)
         {
@@ -54,13 +56,13 @@ namespace Deceive
                 0,
                 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            
+
             //Listen to window being unminimized.
             SetWinEventHook(EVENT_SYSTEM_MINIMIZEEND, EVENT_SYSTEM_MINIMIZEEND, IntPtr.Zero, _focusChangedCallback,
                 0,
                 0,
                 WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
-            
+
             //Listen to ALT + TAB ending.
             SetWinEventHook(EVENT_SYSTEM_SWITCHEND, EVENT_SYSTEM_SWITCHEND, IntPtr.Zero, _focusChangedCallback,
                 0,
@@ -71,18 +73,26 @@ namespace Deceive
             FocusChanged(IntPtr.Zero, 0, IntPtr.Zero, 0, 0, 0, 0);
         }
 
+        public void Dispose()
+        {
+            _target?.Dispose();
+            _disposed = true;
+        }
+
         /**
          * Called when the followed window moves.
          */
         private void TargetMoved(IntPtr hWinEventHook, uint eventType, IntPtr lParam, uint idObject, int idChild,
             uint dwEventThread, uint dwmsEventTime)
         {
+            if (_disposed) return;
+
             //Ignore mouse location changes on window, since window itself does not move.
             if (idObject == OBJID_CURSOR) return;
-            
+
             var newLocation = new Rect();
             if (!GetWindowRect(_handle, ref newLocation)) return;
-            
+
             LoadDpiMatrix();
             MoveOverlay();
         }
@@ -93,6 +103,8 @@ namespace Deceive
         private void FocusChanged(IntPtr hWinEventHook, uint eventType, IntPtr lParam, uint idObject, int idChild,
             uint dwEventThread, uint dwmsEventTime)
         {
+            if (_disposed) return;
+
             // Check if we should appear or not.
             var foreground = GetForegroundWindow();
             if (foreground == IntPtr.Zero || foreground != _handle)
@@ -110,9 +122,9 @@ namespace Deceive
         {
             var newLocation = new Rect();
             if (!GetWindowRect(_handle, ref newLocation)) return;
-                
+
             LoadDpiMatrix();
-            
+
             _overlay.Left = newLocation.Left / _dpiMatrix.M11;
             _overlay.Top = newLocation.Top / _dpiMatrix.M22;
             _overlay.Width = (newLocation.Right - newLocation.Left) / _dpiMatrix.M11;

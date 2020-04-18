@@ -19,7 +19,7 @@ namespace Deceive
         internal int ConfigPort { get; }
 
         internal event EventHandler<ChatServerEventArgs> PatchedChatServer;
-        
+
         internal class ChatServerEventArgs : EventArgs
         {
             internal string ChatHost { get; set; }
@@ -41,7 +41,7 @@ namespace Deceive
 
             // Start a web server that sends everything to ProxyAndRewriteResponse
             var server = new WebServer(o => o
-                    .WithUrlPrefix("http://localhost:" + port)
+                    .WithUrlPrefix("http://127.0.0.1:" + port)
                     .WithMode(HttpListenerMode.EmbedIO))
                 .WithModule(new ActionModule("/", HttpVerbs.Get,
                     ctx => ProxyAndRewriteResponse(configUrl, chatPort, ctx)));
@@ -82,6 +82,7 @@ namespace Deceive
                 var result = await _client.SendAsync(message);
                 var content = await result.Content.ReadAsStringAsync();
                 var modifiedContent = content;
+                Debug.WriteLine(content);
 
                 try
                 {
@@ -121,8 +122,9 @@ namespace Deceive
                     }
 
                     modifiedContent = SimpleJson.SerializeObject(configObject);
-                    
-                    if (riotChatHost != null && riotChatPort != 0) {
+
+                    if (riotChatHost != null && riotChatPort != 0)
+                    {
                         PatchedChatServer?.Invoke(this, new ChatServerEventArgs {ChatHost = riotChatHost, ChatPort = riotChatPort});
                     }
                 }

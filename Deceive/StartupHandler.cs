@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Security;
@@ -13,7 +14,7 @@ namespace Deceive
 {
     internal static class StartupHandler
     {
-        internal static string DeceiveTitle => "Deceive " + Resources.DeceiveVersion;
+        internal static string DeceiveTitle => "Deceive " + Utils.DeceiveVersion;
 
         [STAThread]
         private static void Main(string[] args)
@@ -24,6 +25,7 @@ namespace Deceive
             }
             catch (Exception ex)
             {
+                Trace.WriteLine(ex);
                 // Show some kind of message so that Deceive doesn't just disappear.
                 MessageBox.Show(
                     "Deceive encountered an error and couldn't properly initialize itself. Please contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord.\n\n" + ex,
@@ -40,6 +42,11 @@ namespace Deceive
          */
         private static void StartDeceive(string[] cmdArgs)
         {
+            File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
+            var traceListener = new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log"));
+            Debug.Listeners.Add(traceListener);
+            Debug.AutoFlush = true;
+
             // We are supposed to launch league, so if it's already running something is going wrong.
             if (Utils.IsClientRunning())
             {
@@ -62,7 +69,7 @@ namespace Deceive
             // Step 1: Open a port for our chat proxy, so we can patch chat port into clientconfig.
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            var port = ((IPEndPoint) listener.LocalEndpoint).Port;
 
             // Step 2: Find the Riot Client.
             var riotClientPath = Utils.GetRiotClientPath();
@@ -85,15 +92,27 @@ namespace Deceive
             var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
             // Step 4: Start the Riot Client and wait for a connect.
-            var isLor = cmdArgs.Any(x => x.ToLower() == "lor");
-            var game = isLor ? "bacon" : "league_of_legends";
+            var overlay = cmdArgs.All(x => x.ToLower() != "no-overlay");
+            var game = "league_of_legends";
+            if (cmdArgs.Any(x => x.ToLower() == "lor"))
+            {
+                overlay = false;
+                game = "bacon";
+            }
+
+            if (cmdArgs.Any(x => x.ToLower() == "valorant"))
+            {
+                overlay = false;
+                game = "valorant";
+            }
+
             var startArgs = new ProcessStartInfo
             {
                 FileName = riotClientPath,
-                Arguments = "--client-config-url=\"http://localhost:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
+                Arguments = "--client-config-url=\"http://127.0.0.1:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
             };
-            Process.Start(startArgs);
-            
+            var riotClient = Process.Start(startArgs);
+
             // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
             string chatHost = null;
             var chatPort = 0;
@@ -102,14 +121,14 @@ namespace Deceive
                 chatHost = args.ChatHost;
                 chatPort = args.ChatPort;
             };
-            
+
             var incoming = listener.AcceptTcpClient();
-                
+
             // Step 6: Connect sockets.
             var sslIncoming = new SslStream(incoming.GetStream());
             var cert = new X509Certificate2(Resources.certificates);
             sslIncoming.AuthenticateAsServer(cert);
-            
+
             if (chatHost == null)
             {
                 MessageBox.Show(
@@ -122,16 +141,20 @@ namespace Deceive
 
                 return;
             }
-            
+
             var outgoing = new TcpClient(chatHost, chatPort);
             var sslOutgoing = new SslStream(outgoing.GetStream());
             sslOutgoing.AuthenticateAsClient(chatHost);
 
             // Step 7: All sockets are now connected, start tray icon.
-            var mainController = new MainController(!isLor);
+            var mainController = new MainController(overlay);
             mainController.StartThreads(sslIncoming, sslOutgoing);
             Application.EnableVisualStyles();
             Application.Run(mainController);
+
+            // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
+            riotClient?.WaitForExit();
+            Environment.Exit(0);
         }
     }
 }
