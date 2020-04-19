@@ -5,6 +5,8 @@ using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Runtime.ExceptionServices;
+using System.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Windows.Forms;
@@ -42,6 +44,7 @@ namespace Deceive
          */
         private static void StartDeceive(string[] cmdArgs)
         {
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
             File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
             var traceListener = new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log"));
             Debug.Listeners.Add(traceListener);
@@ -155,6 +158,14 @@ namespace Deceive
             // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
             riotClient?.WaitForExit();
             Environment.Exit(0);
+        }
+
+        [HandleProcessCorruptedStateExceptions, SecurityCritical]
+        private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            //Log all unhandled exceptions
+            Trace.WriteLine(e.ExceptionObject as Exception);
+            Trace.WriteLine(Environment.StackTrace);
         }
     }
 }
