@@ -51,7 +51,7 @@ namespace Deceive
             Debug.AutoFlush = true;
 
             // We are supposed to launch league, so if it's already running something is going wrong.
-            if (Utils.IsClientRunning())
+            if (Utils.IsClientRunning() && cmdArgs.All(x => x.ToLower() != "allow-multiple-clients"))
             {
                 var result = MessageBox.Show(
                     "League or the Riot Client is currently running. In order to mask your online status, League and the Riot Client needs to be started by Deceive. Do you want Deceive to stop League and the Riot Client, so that it can restart it with the proper configuration?",
@@ -114,6 +114,7 @@ namespace Deceive
                 FileName = riotClientPath,
                 Arguments = "--client-config-url=\"http://127.0.0.1:" + proxyServer.ConfigPort + "\" --launch-product=" + game + " --launch-patchline=live"
             };
+            if (cmdArgs.Any(x => x.ToLower() == "allow-multiple-clients")) startArgs.Arguments += " --allow-multiple-clients";
             var riotClient = Process.Start(startArgs);
 
             // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
