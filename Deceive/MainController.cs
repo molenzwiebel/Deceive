@@ -110,6 +110,16 @@ namespace Deceive
                 Checked = _connectToMuc
             };
 
+            var chatStatus = new MenuItem("Chat", (a, e) =>
+            {
+                UpdateStatus(_status = "chat");
+                _enabled = true;
+                UpdateUI();
+            })
+            {
+                Checked = _status.Equals("chat")
+            };
+
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
                 UpdateStatus(_status = "offline");
@@ -130,7 +140,7 @@ namespace Deceive
                 Checked = _status.Equals("mobile")
             };
 
-            var typeMenuItem = new MenuItem("Status Type", new[] {offlineStatus, mobileStatus});
+            var typeMenuItem = new MenuItem("Status Type", new[] {chatStatus, offlineStatus, mobileStatus});
 
             var quitMenuItem = new MenuItem("Quit", (a, b) =>
             {
@@ -244,7 +254,11 @@ namespace Deceive
                         presence.Remove();
                     }
 
-                    presence.Element("show")?.ReplaceNodes(targetStatus);
+                    if (targetStatus != "chat" || presence.Element("games")?.Element("league_of_legends")?.Element("st")?.Value != "dnd")
+                    {
+                        presence.Element("show")?.ReplaceNodes(targetStatus);
+                        presence.Element("games")?.Element("league_of_legends")?.Element("st")?.ReplaceNodes(targetStatus);
+                    }
 
                     if (targetStatus == "chat") continue;
                     presence.Element("status")?.Remove();
@@ -253,7 +267,6 @@ namespace Deceive
                     {
                         presence.Element("games")?.Element("league_of_legends")?.Element("p")?.Remove();
                         presence.Element("games")?.Element("league_of_legends")?.Element("m")?.Remove();
-                        presence.Element("games")?.Element("league_of_legends")?.Element("st")?.ReplaceNodes(targetStatus);
                     }
                     else
                     {

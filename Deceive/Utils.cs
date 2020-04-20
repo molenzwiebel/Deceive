@@ -18,7 +18,7 @@ namespace Deceive
         {
             get
             {
-                var version = Assembly.GetEntryAssembly()?.GetName().Version;
+                var version = Assembly.GetEntryAssembly()!.GetName().Version;
                 return "v" + version.Major + "." + version.Minor + "." + version.Build;
             }
         }
