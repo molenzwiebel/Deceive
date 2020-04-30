@@ -45,10 +45,18 @@ namespace Deceive
         private static void StartDeceive(string[] cmdArgs)
         {
             AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
-            File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
-            var traceListener = new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log"));
-            Debug.Listeners.Add(traceListener);
-            Debug.AutoFlush = true;
+            try
+            {
+                File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
+                var traceListener = new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log"));
+                Debug.Listeners.Add(traceListener);
+                Debug.AutoFlush = true;
+            }
+            catch (IOException e)
+            {
+                // Write to debug.log, if file is already being accessed.
+                Trace.WriteLine(e);
+            }
 
             // We are supposed to launch league, so if it's already running something is going wrong.
             if (Utils.IsClientRunning() && cmdArgs.All(x => x.ToLower() != "allow-multiple-clients"))
