@@ -177,7 +177,7 @@ namespace Deceive
             try
             {
                 int byteCount;
-                var bytes = new byte[4096];
+                var bytes = new byte[8192];
 
                 do
                 {
@@ -214,7 +214,7 @@ namespace Deceive
             try
             {
                 int byteCount;
-                var bytes = new byte[4096];
+                var bytes = new byte[8192];
 
                 do
                 {
