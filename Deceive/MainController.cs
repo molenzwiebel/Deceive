@@ -21,18 +21,20 @@ namespace Deceive
         private readonly string _statusFile = Path.Combine(Utils.DataDir, "status");
         private bool _connectToMuc = true;
 
-        private LCUOverlay _overlay = null;
-        private WindowFollower _follower = null;
+        private LCUOverlay _overlay;
+        private WindowFollower _follower;
 
         private SslStream _incoming;
         private SslStream _outgoing;
         private string _lastPresence; // we resend this if the state changes
 
+        internal event EventHandler ConnectionErrored;
+
         internal MainController(bool createOverlay)
         {
             _trayIcon = new NotifyIcon
             {
-                Icon = Resources.deceive,
+                Icon = Resources.DeceiveIcon,
                 Visible = true,
                 BalloonTipTitle = StartupHandler.DeceiveTitle,
                 BalloonTipText = "Deceive is currently masking your status. Right-Click the tray icon for more options."
@@ -43,7 +45,7 @@ namespace Deceive
             if (createOverlay) CreateOverlay();
 
             LoadStatus();
-            UpdateUI();
+            UpdateTray();
         }
 
         private async void CreateOverlay()
@@ -65,7 +67,7 @@ namespace Deceive
             }
         }
 
-        private void UpdateUI()
+        private void UpdateTray()
         {
             var aboutMenuItem = new MenuItem(StartupHandler.DeceiveTitle)
             {
@@ -76,7 +78,7 @@ namespace Deceive
             {
                 _enabled = !_enabled;
                 UpdateStatus(_enabled ? _status : "chat");
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _enabled
@@ -95,7 +97,7 @@ namespace Deceive
                     _overlay = null;
                 }
 
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _overlay != null
@@ -104,7 +106,7 @@ namespace Deceive
             var mucMenuItem = new MenuItem("Enable lobby chat", (a, e) =>
             {
                 _connectToMuc = !_connectToMuc;
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _connectToMuc
@@ -114,7 +116,7 @@ namespace Deceive
             {
                 UpdateStatus(_status = "chat");
                 _enabled = true;
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _status.Equals("chat")
@@ -124,7 +126,7 @@ namespace Deceive
             {
                 UpdateStatus(_status = "offline");
                 _enabled = true;
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _status.Equals("offline")
@@ -134,7 +136,7 @@ namespace Deceive
             {
                 UpdateStatus(_status = "mobile");
                 _enabled = true;
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _status.Equals("mobile")
@@ -145,7 +147,7 @@ namespace Deceive
             var quitMenuItem = new MenuItem("Quit", (a, b) =>
             {
                 var result = MessageBox.Show(
-                    "Are you sure you want to stop Deceive? This will also stop League if it is running.",
+                    "Are you sure you want to stop Deceive? This will also stop related games if they are running.",
                     StartupHandler.DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
@@ -154,10 +156,13 @@ namespace Deceive
 
                 if (result != DialogResult.Yes) return;
 
-                Utils.KillClients();
+                Utils.KillProcesses();
                 SaveStatus();
                 Application.Exit();
             });
+
+            // var closeIn = new MenuItem("Close incoming", (a, e) => { _incoming.Close(); });
+            // var closeOut = new MenuItem("Close outgoing", (a, e) => { _outgoing.Close(); });
 
             _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, quitMenuItem});
             _overlay?.UpdateStatus(_status, _enabled);
@@ -205,7 +210,7 @@ namespace Deceive
             {
                 Trace.WriteLine(@"Incoming closed.");
                 SaveStatus();
-                Application.Exit();
+                ConnectionErrored?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -230,7 +235,7 @@ namespace Deceive
                 Trace.WriteLine(e);
                 Trace.WriteLine(@"Outgoing errored.");
                 SaveStatus();
-                Application.Exit();
+                ConnectionErrored?.Invoke(this, EventArgs.Empty);
             }
         }
 
