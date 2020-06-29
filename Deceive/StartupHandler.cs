@@ -68,6 +68,7 @@ namespace Deceive
                 File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
                 Debug.Listeners.Add(new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log")));
                 Debug.AutoFlush = true;
+                Trace.WriteLine(DeceiveTitle);
             }
             catch
             {
