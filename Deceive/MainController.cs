@@ -26,6 +26,7 @@ namespace Deceive
 
         private SslStream _incoming;
         private SslStream _outgoing;
+        private bool _connected;
         private string _lastPresence; // we resend this if the state changes
 
         internal event EventHandler ConnectionErrored;
@@ -172,6 +173,7 @@ namespace Deceive
         {
             _incoming = incoming;
             _outgoing = outgoing;
+            _connected = true;
 
             new Thread(IncomingLoop).Start();
             new Thread(OutgoingLoop).Start();
@@ -200,7 +202,7 @@ namespace Deceive
                     {
                         _outgoing.Write(bytes, 0, byteCount);
                     }
-                } while (byteCount != 0);
+                } while (byteCount != 0 && _connected);
             }
             catch (Exception e)
             {
@@ -210,7 +212,7 @@ namespace Deceive
             {
                 Trace.WriteLine(@"Incoming closed.");
                 SaveStatus();
-                ConnectionErrored?.Invoke(this, EventArgs.Empty);
+                if (_connected) OnConnectionErrored();
             }
         }
 
@@ -226,7 +228,7 @@ namespace Deceive
                     byteCount = _outgoing.Read(bytes, 0, bytes.Length);
                     Debug.WriteLine("TO RC: " + Encoding.UTF8.GetString(bytes, 0, byteCount));
                     _incoming.Write(bytes, 0, byteCount);
-                } while (byteCount != 0);
+                } while (byteCount != 0 && _connected);
 
                 Trace.WriteLine(@"Outgoing closed.");
             }
@@ -235,7 +237,7 @@ namespace Deceive
                 Trace.WriteLine(e);
                 Trace.WriteLine(@"Outgoing errored.");
                 SaveStatus();
-                ConnectionErrored?.Invoke(this, EventArgs.Empty);
+                if (_connected) OnConnectionErrored();
             }
         }
 
@@ -321,6 +323,12 @@ namespace Deceive
         private void SaveStatus()
         {
             File.WriteAllText(_statusFile, _status);
+        }
+
+        private void OnConnectionErrored()
+        {
+            _connected = false;
+            ConnectionErrored?.Invoke(this, EventArgs.Empty);
         }
     }
 }
