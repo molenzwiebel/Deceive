@@ -162,10 +162,14 @@ namespace Deceive
                 Application.Exit();
             });
 
-            // var closeIn = new MenuItem("Close incoming", (a, e) => { _incoming.Close(); });
-            // var closeOut = new MenuItem("Close outgoing", (a, e) => { _outgoing.Close(); });
+#if DEBUG
+            var closeIn = new MenuItem("Close incoming", (a, e) => { _incoming.Close(); });
+            var closeOut = new MenuItem("Close outgoing", (a, e) => { _outgoing.Close(); });
 
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, closeIn, closeOut, quitMenuItem});
+#else
             _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, quitMenuItem});
+#endif
             _overlay?.UpdateStatus(_status, _enabled);
         }
 

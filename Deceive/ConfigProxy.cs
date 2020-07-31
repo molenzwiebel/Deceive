@@ -112,7 +112,7 @@ namespace Deceive
                     var affinities = (JsonObject) configObject["chat.affinities"];
                     if ((bool) configObject["chat.affinity.enabled"])
                     {
-                        var pasRequest = new HttpRequestMessage(HttpMethod.Get, "https://pas.geo.si.riotgames.com/pas/v1/service/chat");
+                        var pasRequest = new HttpRequestMessage(HttpMethod.Get, "https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat");
                         pasRequest.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
                         var pasJwt = await (await _client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
                         Debug.WriteLine(pasJwt);
