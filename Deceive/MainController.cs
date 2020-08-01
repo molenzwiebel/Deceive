@@ -195,7 +195,7 @@ namespace Deceive
                     byteCount = _incoming.Read(bytes, 0, bytes.Length);
 
                     var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
-                    Debug.WriteLine("FROM RC: " + content);
+                    Trace.WriteLine("<!--FROM RC-->" + content);
 
                     // If this is possibly a presence stanza, rewrite it.
                     if (content.Contains("<presence") && _enabled)
@@ -230,7 +230,7 @@ namespace Deceive
                 do
                 {
                     byteCount = _outgoing.Read(bytes, 0, bytes.Length);
-                    Debug.WriteLine("TO RC: " + Encoding.UTF8.GetString(bytes, 0, byteCount));
+                    Trace.WriteLine("<!--TO RC-->" + Encoding.UTF8.GetString(bytes, 0, byteCount));
                     _incoming.Write(bytes, 0, byteCount);
                 } while (byteCount != 0 && _connected);
 
@@ -302,7 +302,7 @@ namespace Deceive
                 }
 
                 _outgoing.Write(Encoding.UTF8.GetBytes(sb.ToString()));
-                Debug.WriteLine("DECEIVE: " + sb);
+                Trace.WriteLine("<!--DECEIVE-->" + sb);
             }
             catch (Exception e)
             {

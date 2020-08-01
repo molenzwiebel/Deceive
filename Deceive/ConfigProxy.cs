@@ -82,7 +82,7 @@ namespace Deceive
             var result = await _client.SendAsync(message);
             var content = await result.Content.ReadAsStringAsync();
             var modifiedContent = content;
-            Debug.WriteLine(content);
+            Trace.WriteLine("ORIGINAL CLIENTCONFIG: " + content);
 
             try
             {
@@ -115,7 +115,7 @@ namespace Deceive
                         var pasRequest = new HttpRequestMessage(HttpMethod.Get, "https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat");
                         pasRequest.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
                         var pasJwt = await (await _client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
-                        Debug.WriteLine(pasJwt);
+                        Trace.WriteLine("PAS TOKEN:" + pasJwt);
                         var affinity = new JsonWebToken(pasJwt).GetPayloadValue<string>("affinity");
                         // replace fallback host with host by player affinity
                         riotChatHost = affinities[affinity] as string;
@@ -134,6 +134,7 @@ namespace Deceive
                 }
 
                 modifiedContent = SimpleJson.SerializeObject(configObject);
+                Trace.WriteLine("MODIFIED CLIENTCONFIG: " + modifiedContent);
 
                 if (riotChatHost != null && riotChatPort != 0)
                 {
