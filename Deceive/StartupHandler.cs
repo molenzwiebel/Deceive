@@ -47,7 +47,7 @@ namespace Deceive
         private static void StartDeceive(string[] cmdArgs)
         {
             // We are supposed to launch league, so if it's already running something is going wrong.
-            if (Utils.IsClientRunning() && cmdArgs.All(x => x.ToLower() != "allow-multiple-clients"))
+            if (Utils.IsClientRunning() && cmdArgs.All(x => x.ToLower() != "--allow-multiple-clients"))
             {
                 var result = MessageBox.Show(
                     "The Riot Client is currently running. In order to mask your online status, the Riot Client needs to be started by Deceive. " +
@@ -105,7 +105,7 @@ namespace Deceive
             var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
             // Step 4: Start the Riot Client and wait for a connect.
-            var overlayEnabled = cmdArgs.All(x => x.ToLower() != "no-overlay");
+            var overlayEnabled = cmdArgs.All(x => x.ToLower() != "--no-overlay");
             var game = "league_of_legends";
             if (cmdArgs.Any(x => x.ToLower() == "lor"))
             {
