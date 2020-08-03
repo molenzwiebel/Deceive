@@ -124,7 +124,7 @@ namespace Deceive
                 FileName = riotClientPath,
                 Arguments = $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\" --launch-product={game} --launch-patchline=live"
             };
-            if (cmdArgs.Any(x => x.ToLower() == "allow-multiple-clients")) startArgs.Arguments += " --allow-multiple-clients";
+            if (cmdArgs.Any(x => x.ToLower() == "--allow-multiple-clients")) startArgs.Arguments += " --allow-multiple-clients";
             var riotClient = Process.Start(startArgs);
             // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
             if (riotClient != null)
