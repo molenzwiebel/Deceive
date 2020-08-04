@@ -21,18 +21,21 @@ namespace Deceive
         private readonly string _statusFile = Path.Combine(Utils.DataDir, "status");
         private bool _connectToMuc = true;
 
-        private LCUOverlay _overlay = null;
-        private WindowFollower _follower = null;
+        private LCUOverlay _overlay;
+        private WindowFollower _follower;
 
         private SslStream _incoming;
         private SslStream _outgoing;
+        private bool _connected;
         private string _lastPresence; // we resend this if the state changes
+
+        internal event EventHandler ConnectionErrored;
 
         internal MainController(bool createOverlay)
         {
             _trayIcon = new NotifyIcon
             {
-                Icon = Resources.deceive,
+                Icon = Resources.DeceiveIcon,
                 Visible = true,
                 BalloonTipTitle = StartupHandler.DeceiveTitle,
                 BalloonTipText = "Deceive is currently masking your status. Right-Click the tray icon for more options."
@@ -43,7 +46,7 @@ namespace Deceive
             if (createOverlay) CreateOverlay();
 
             LoadStatus();
-            UpdateUI();
+            UpdateTray();
         }
 
         private async void CreateOverlay()
@@ -65,7 +68,7 @@ namespace Deceive
             }
         }
 
-        private void UpdateUI()
+        private void UpdateTray()
         {
             var aboutMenuItem = new MenuItem(StartupHandler.DeceiveTitle)
             {
@@ -76,7 +79,7 @@ namespace Deceive
             {
                 _enabled = !_enabled;
                 UpdateStatus(_enabled ? _status : "chat");
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _enabled
@@ -95,7 +98,7 @@ namespace Deceive
                     _overlay = null;
                 }
 
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _overlay != null
@@ -104,17 +107,27 @@ namespace Deceive
             var mucMenuItem = new MenuItem("Enable lobby chat", (a, e) =>
             {
                 _connectToMuc = !_connectToMuc;
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _connectToMuc
+            };
+
+            var chatStatus = new MenuItem("Chat", (a, e) =>
+            {
+                UpdateStatus(_status = "chat");
+                _enabled = true;
+                UpdateTray();
+            })
+            {
+                Checked = _status.Equals("chat")
             };
 
             var offlineStatus = new MenuItem("Offline", (a, e) =>
             {
                 UpdateStatus(_status = "offline");
                 _enabled = true;
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _status.Equals("offline")
@@ -124,18 +137,18 @@ namespace Deceive
             {
                 UpdateStatus(_status = "mobile");
                 _enabled = true;
-                UpdateUI();
+                UpdateTray();
             })
             {
                 Checked = _status.Equals("mobile")
             };
 
-            var typeMenuItem = new MenuItem("Status Type", new[] {offlineStatus, mobileStatus});
+            var typeMenuItem = new MenuItem("Status Type", new[] {chatStatus, offlineStatus, mobileStatus});
 
             var quitMenuItem = new MenuItem("Quit", (a, b) =>
             {
                 var result = MessageBox.Show(
-                    "Are you sure you want to stop Deceive? This will also stop League if it is running.",
+                    "Are you sure you want to stop Deceive? This will also stop related games if they are running.",
                     StartupHandler.DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
@@ -144,12 +157,19 @@ namespace Deceive
 
                 if (result != DialogResult.Yes) return;
 
-                Utils.KillClients();
+                Utils.KillProcesses();
                 SaveStatus();
                 Application.Exit();
             });
 
+#if DEBUG
+            var closeIn = new MenuItem("Close incoming", (a, e) => { _incoming.Close(); });
+            var closeOut = new MenuItem("Close outgoing", (a, e) => { _outgoing.Close(); });
+
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, closeIn, closeOut, quitMenuItem});
+#else
             _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, quitMenuItem});
+#endif
             _overlay?.UpdateStatus(_status, _enabled);
         }
 
@@ -157,6 +177,7 @@ namespace Deceive
         {
             _incoming = incoming;
             _outgoing = outgoing;
+            _connected = true;
 
             new Thread(IncomingLoop).Start();
             new Thread(OutgoingLoop).Start();
@@ -167,14 +188,14 @@ namespace Deceive
             try
             {
                 int byteCount;
-                var bytes = new byte[4096];
+                var bytes = new byte[8192];
 
                 do
                 {
                     byteCount = _incoming.Read(bytes, 0, bytes.Length);
 
                     var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
-                    Debug.WriteLine("FROM RC: " + content);
+                    Trace.WriteLine("<!--FROM RC-->" + content);
 
                     // If this is possibly a presence stanza, rewrite it.
                     if (content.Contains("<presence") && _enabled)
@@ -185,7 +206,7 @@ namespace Deceive
                     {
                         _outgoing.Write(bytes, 0, byteCount);
                     }
-                } while (byteCount != 0);
+                } while (byteCount != 0 && _connected);
             }
             catch (Exception e)
             {
@@ -195,7 +216,7 @@ namespace Deceive
             {
                 Trace.WriteLine(@"Incoming closed.");
                 SaveStatus();
-                Application.Exit();
+                if (_connected) OnConnectionErrored();
             }
         }
 
@@ -204,14 +225,14 @@ namespace Deceive
             try
             {
                 int byteCount;
-                var bytes = new byte[4096];
+                var bytes = new byte[8192];
 
                 do
                 {
                     byteCount = _outgoing.Read(bytes, 0, bytes.Length);
-                    Debug.WriteLine("TO RC: " + Encoding.UTF8.GetString(bytes, 0, byteCount));
+                    Trace.WriteLine("<!--TO RC-->" + Encoding.UTF8.GetString(bytes, 0, byteCount));
                     _incoming.Write(bytes, 0, byteCount);
-                } while (byteCount != 0);
+                } while (byteCount != 0 && _connected);
 
                 Trace.WriteLine(@"Outgoing closed.");
             }
@@ -220,7 +241,7 @@ namespace Deceive
                 Trace.WriteLine(e);
                 Trace.WriteLine(@"Outgoing errored.");
                 SaveStatus();
-                Application.Exit();
+                if (_connected) OnConnectionErrored();
             }
         }
 
@@ -244,7 +265,11 @@ namespace Deceive
                         presence.Remove();
                     }
 
-                    presence.Element("show")?.ReplaceNodes(targetStatus);
+                    if (targetStatus != "chat" || presence.Element("games")?.Element("league_of_legends")?.Element("st")?.Value != "dnd")
+                    {
+                        presence.Element("show")?.ReplaceNodes(targetStatus);
+                        presence.Element("games")?.Element("league_of_legends")?.Element("st")?.ReplaceNodes(targetStatus);
+                    }
 
                     if (targetStatus == "chat") continue;
                     presence.Element("status")?.Remove();
@@ -253,7 +278,6 @@ namespace Deceive
                     {
                         presence.Element("games")?.Element("league_of_legends")?.Element("p")?.Remove();
                         presence.Element("games")?.Element("league_of_legends")?.Element("m")?.Remove();
-                        presence.Element("games")?.Element("league_of_legends")?.Element("st")?.ReplaceNodes(targetStatus);
                     }
                     else
                     {
@@ -278,7 +302,7 @@ namespace Deceive
                 }
 
                 _outgoing.Write(Encoding.UTF8.GetBytes(sb.ToString()));
-                Debug.WriteLine("DECEIVE: " + sb);
+                Trace.WriteLine("<!--DECEIVE-->" + sb);
             }
             catch (Exception e)
             {
@@ -303,6 +327,12 @@ namespace Deceive
         private void SaveStatus()
         {
             File.WriteAllText(_statusFile, _status);
+        }
+
+        private void OnConnectionErrored()
+        {
+            _connected = false;
+            ConnectionErrored?.Invoke(this, EventArgs.Empty);
         }
     }
 }

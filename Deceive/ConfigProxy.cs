@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using EmbedIO;
 using EmbedIO.Actions;
+using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Deceive
 {
@@ -62,100 +63,112 @@ namespace Deceive
         {
             var url = configUrl + ctx.Request.RawUrl;
 
-            using (var message = new HttpRequestMessage(HttpMethod.Get, url))
+            using var message = new HttpRequestMessage(HttpMethod.Get, url);
+            // Cloudflare bitches at us without a user agent.
+            message.Headers.TryAddWithoutValidation("User-Agent", ctx.Request.Headers["user-agent"]);
+
+            // Add authorization headers for player config.
+            if (ctx.Request.Headers["x-riot-entitlements-jwt"] != null)
             {
-                // Cloudflare bitches at us without a user agent.
-                message.Headers.TryAddWithoutValidation("User-Agent", ctx.Request.Headers["user-agent"]);
-
-                // Add authorization headers for player config.
-                if (ctx.Request.Headers["x-riot-entitlements-jwt"] != null)
-                {
-                    message.Headers.TryAddWithoutValidation("X-Riot-Entitlements-JWT",
-                        ctx.Request.Headers["x-riot-entitlements-jwt"]);
-                }
-
-                if (ctx.Request.Headers["authorization"] != null)
-                {
-                    message.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
-                }
-
-                var result = await _client.SendAsync(message);
-                var content = await result.Content.ReadAsStringAsync();
-                var modifiedContent = content;
-                Debug.WriteLine(content);
-
-                try
-                {
-                    var configObject = (JsonObject) SimpleJson.DeserializeObject(content);
-
-                    // Set chat.affinities (a dictionary) to all localhost.
-                    if (configObject.ContainsKey("chat.affinities"))
-                    {
-                        var affinities = (JsonObject) configObject["chat.affinities"];
-                        foreach (var key in new List<string>(affinities.Keys)) // clone to prevent concurrent modification
-                        {
-                            affinities[key] = "127.0.0.1";
-                        }
-                    }
-
-                    string riotChatHost = null;
-                    var riotChatPort = 0;
-
-                    // Set fallback host to localhost.
-                    if (configObject.ContainsKey("chat.host"))
-                    {
-                        riotChatHost = configObject["chat.host"].ToString();
-                        configObject["chat.host"] = "127.0.0.1";
-                    }
-
-                    // Set chat port.
-                    if (configObject.ContainsKey("chat.port"))
-                    {
-                        riotChatPort = int.Parse(configObject["chat.port"].ToString());
-                        configObject["chat.port"] = chatPort;
-                    }
-
-                    // Allow an invalid cert.
-                    if (configObject.ContainsKey("chat.allow_bad_cert.enabled"))
-                    {
-                        configObject["chat.allow_bad_cert.enabled"] = true;
-                    }
-
-                    modifiedContent = SimpleJson.SerializeObject(configObject);
-
-                    if (riotChatHost != null && riotChatPort != 0)
-                    {
-                        PatchedChatServer?.Invoke(this, new ChatServerEventArgs {ChatHost = riotChatHost, ChatPort = riotChatPort});
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Trace.WriteLine(ex);
-
-                    // Show a message instead of failing silently.
-                    MessageBox.Show(
-                        "Deceive was unable to rewrite a League of Legends configuration file. This normally happens because Riot changed something on their end. Please check if there's a new version of Deceive available, or contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord if there's not.\n\n" +
-                        ex,
-                        StartupHandler.DeceiveTitle,
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error,
-                        MessageBoxDefaultButton.Button1
-                    );
-
-                    Application.Exit();
-                }
-
-                // Using the builtin EmbedIO methods for sending the response adds some garbage in the front of it.
-                // This seems to do the trick.
-                var responseBytes = Encoding.UTF8.GetBytes(modifiedContent);
-
-                ctx.Response.StatusCode = (int) result.StatusCode;
-                ctx.Response.SendChunked = false;
-                ctx.Response.ContentLength64 = responseBytes.Length;
-                ctx.Response.ContentType = "application/json";
-                ctx.Response.OutputStream.Write(responseBytes, 0, responseBytes.Length);
-                ctx.Response.OutputStream.Close();
+                message.Headers.TryAddWithoutValidation("X-Riot-Entitlements-JWT",
+                    ctx.Request.Headers["x-riot-entitlements-jwt"]);
             }
+
+            if (ctx.Request.Headers["authorization"] != null)
+            {
+                message.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
+            }
+
+            var result = await _client.SendAsync(message);
+            var content = await result.Content.ReadAsStringAsync();
+            var modifiedContent = content;
+            Trace.WriteLine("ORIGINAL CLIENTCONFIG: " + content);
+
+            try
+            {
+                var configObject = (JsonObject) SimpleJson.DeserializeObject(content);
+
+                string riotChatHost = null;
+                var riotChatPort = 0;
+
+                // Set fallback host to localhost.
+                if (configObject.ContainsKey("chat.host"))
+                {
+                    // Save fallback host
+                    riotChatHost = configObject["chat.host"].ToString();
+                    configObject["chat.host"] = "127.0.0.1";
+                }
+
+                // Set chat port.
+                if (configObject.ContainsKey("chat.port"))
+                {
+                    riotChatPort = int.Parse(configObject["chat.port"].ToString());
+                    configObject["chat.port"] = chatPort;
+                }
+
+                // Set chat.affinities (a dictionary) to all localhost.
+                if (configObject.ContainsKey("chat.affinities"))
+                {
+                    var affinities = (JsonObject) configObject["chat.affinities"];
+                    if ((bool) configObject["chat.affinity.enabled"])
+                    {
+                        var pasRequest = new HttpRequestMessage(HttpMethod.Get, "https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat");
+                        pasRequest.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
+                        var pasJwt = await (await _client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
+                        Trace.WriteLine("PAS TOKEN:" + pasJwt);
+                        var affinity = new JsonWebToken(pasJwt).GetPayloadValue<string>("affinity");
+                        // replace fallback host with host by player affinity
+                        riotChatHost = affinities[affinity] as string;
+                    }
+
+                    foreach (var key in new List<string>(affinities.Keys)) // clone to prevent concurrent modification
+                    {
+                        affinities[key] = "127.0.0.1";
+                    }
+                }
+
+                // Allow an invalid cert.
+                if (configObject.ContainsKey("chat.allow_bad_cert.enabled"))
+                {
+                    configObject["chat.allow_bad_cert.enabled"] = true;
+                }
+
+                modifiedContent = SimpleJson.SerializeObject(configObject);
+                Trace.WriteLine("MODIFIED CLIENTCONFIG: " + modifiedContent);
+
+                if (riotChatHost != null && riotChatPort != 0)
+                {
+                    PatchedChatServer?.Invoke(this, new ChatServerEventArgs {ChatHost = riotChatHost, ChatPort = riotChatPort});
+                }
+            }
+            catch (Exception ex)
+            {
+                Trace.WriteLine(ex);
+
+                // Show a message instead of failing silently.
+                MessageBox.Show(
+                    "Deceive was unable to rewrite a League of Legends configuration file. This normally happens because Riot changed something on their end. " +
+                    "Please check if there's a new version of Deceive available, or contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord if there's not.\n\n" +
+                    ex,
+                    StartupHandler.DeceiveTitle,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button1
+                );
+
+                Application.Exit();
+            }
+
+            // Using the builtin EmbedIO methods for sending the response adds some garbage in the front of it.
+            // This seems to do the trick.
+            var responseBytes = Encoding.UTF8.GetBytes(modifiedContent);
+
+            ctx.Response.StatusCode = (int) result.StatusCode;
+            ctx.Response.SendChunked = false;
+            ctx.Response.ContentLength64 = responseBytes.Length;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.OutputStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+            ctx.Response.OutputStream.Close();
         }
     }
 }

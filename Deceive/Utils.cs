@@ -18,7 +18,7 @@ namespace Deceive
         {
             get
             {
-                var version = Assembly.GetEntryAssembly()?.GetName().Version;
+                var version = Assembly.GetEntryAssembly()!.GetName().Version;
                 return "v" + version.Major + "." + version.Minor + "." + version.Build;
             }
         }
@@ -64,7 +64,9 @@ namespace Deceive
                 File.WriteAllText(persistencePath, latestVersion);
 
                 var result = MessageBox.Show(
-                    $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\nPress OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
+                    $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
+                    $"Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\n" +
+                    $"Press OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
                     StartupHandler.DeceiveTitle,
                     MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Information,
@@ -83,26 +85,23 @@ namespace Deceive
             }
         }
 
-        private static Process[] GetRiotProcesses()
+        private static IEnumerable<Process> GetProcesses()
         {
-            var riotCandidates = Process.GetProcessesByName("LeagueClient");
-            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("LoR")).ToArray();
-            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("VALORANT-Win64-Shipping")).ToArray();
-            riotCandidates = riotCandidates.Concat(Process.GetProcessesByName("RiotClientServices")).ToArray();
-            return riotCandidates;
+            var riotCandidates = Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Where(process => process.Id != Process.GetCurrentProcess().Id).ToList();
+            riotCandidates.AddRange(Process.GetProcessesByName("LeagueClient"));
+            riotCandidates.AddRange(Process.GetProcessesByName("LoR"));
+            riotCandidates.AddRange(Process.GetProcessesByName("VALORANT-Win64-Shipping"));
+            riotCandidates.AddRange(Process.GetProcessesByName("RiotClientServices"));
+            return riotCandidates; 
         }
 
-        // Checks if there is a running LCU or RC instance.
-        public static bool IsClientRunning()
-        {
-            return GetRiotProcesses().Length > 0;
-        }
+        // Checks if there is a running LCU/LoR/VALORANT/RC or Deceive instance.
+        public static bool IsClientRunning() => GetProcesses().Any();
 
-        // Kills the running LCU or RC instance, if applicable.
-        public static void KillClients()
+        // Kills the running LCU/LoR/VALORANT/RC or Deceive instance, if applicable.
+        public static void KillProcesses()
         {
-            IEnumerable<Process> candidates = GetRiotProcesses();
-            foreach (var process in candidates)
+            foreach (var process in GetProcesses())
             {
                 process.Refresh();
                 if (process.HasExited) continue;

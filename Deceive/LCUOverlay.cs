@@ -17,7 +17,8 @@ namespace Deceive
         private static readonly FontFamily Helvetica = new FontFamily("Helvetica");
 
         private static readonly Brush OfflineMobileColor = new SolidColorBrush(Color.FromRgb(137, 141, 127));
-        private static readonly Brush InactiveColor = new SolidColorBrush(Colors.LimeGreen);
+        private static readonly Brush OnlineColor = new SolidColorBrush(Colors.LimeGreen);
+        private static readonly Brush DisabledColor = new SolidColorBrush(Colors.Crimson);
 
         // 1920x1080 sizes.
         private static readonly Rect HugeBackgroundRect = new Rect(1692, 72, 180, 41);
@@ -87,15 +88,25 @@ namespace Deceive
         {
             var content = "";
             var color = OfflineMobileColor;
+            if (enabled && !_canvas.Children.Contains(_background)) _canvas.Children.Insert(0, _background);
 
             if (!enabled)
             {
-                content = "Online (No Deceive)";
-                color = InactiveColor;
+                content = "\n(No Deceive)";
+                color = DisabledColor;
+                _canvas.Children.Remove(_background);
             }
             else
             {
-                content = status.Equals("mobile") ? "Mobile (Deceive)" : "Offline (Deceive)";
+                if (status.Equals("mobile"))
+                    content = "Mobile (Deceive)";
+                else if (status.Equals("offline"))
+                    content = "Offline (Deceive)";
+                else if (status.Equals("chat"))
+                {
+                    color = OnlineColor;
+                    content = "Online (Deceive)";
+                }
             }
 
             _textLabel.Content = content;

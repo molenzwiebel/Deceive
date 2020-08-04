@@ -67,6 +67,7 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Text;
 using Deceive.Reflection;
+// ReSharper disable All
 
 // ReSharper disable LoopCanBeConvertedToQuery
 // ReSharper disable RedundantExplicitArrayCreation
