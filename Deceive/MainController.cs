@@ -23,9 +23,6 @@ namespace Deceive
         private bool _createdFakePlayer = false;
         private bool _sentIntroductionText = false;
 
-        private LCUOverlay _overlay;
-        private WindowFollower _follower;
-
         private SslStream _incoming;
         private SslStream _outgoing;
         private bool _connected;
@@ -33,7 +30,7 @@ namespace Deceive
 
         internal event EventHandler ConnectionErrored;
 
-        internal MainController(bool createOverlay)
+        internal MainController()
         {
             _trayIcon = new NotifyIcon
             {
@@ -44,30 +41,8 @@ namespace Deceive
             };
             _trayIcon.ShowBalloonTip(5000);
 
-            // Create overlay and start following the LCU with it.
-            if (createOverlay) CreateOverlay();
-
             LoadStatus();
             UpdateTray();
-        }
-
-        private async void CreateOverlay()
-        {
-            while (true)
-            {
-                var process = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
-                if (process == null)
-                {
-                    await Task.Delay(5000);
-                    continue;
-                }
-
-                _overlay = new LCUOverlay();
-                _overlay.Show();
-                _follower = new WindowFollower(_overlay, process);
-                _follower.StartFollowing();
-                return;
-            }
         }
 
         private void UpdateTray()
@@ -85,25 +60,6 @@ namespace Deceive
             })
             {
                 Checked = _enabled
-            };
-
-            var overlayMenuItem = new MenuItem("Show status overlay", (a, e) =>
-            {
-                if (_overlay == null)
-                {
-                    CreateOverlay();
-                }
-                else
-                {
-                    _follower.Dispose();
-                    _overlay.Close();
-                    _overlay = null;
-                }
-
-                UpdateTray();
-            })
-            {
-                Checked = _overlay != null
             };
 
             var mucMenuItem = new MenuItem("Enable lobby chat", (a, e) =>
@@ -169,11 +125,10 @@ namespace Deceive
             var closeOut = new MenuItem("Close outgoing", (a, e) => { _outgoing.Close(); });
             var sendTestMsg = new MenuItem("Send message", (a, e) => { SendMessageFromFakePlayer("Test"); });
 
-            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, closeIn, closeOut, sendTestMsg, quitMenuItem});
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, sendTestMsg, quitMenuItem});
 #else
-            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, overlayMenuItem, mucMenuItem, quitMenuItem});
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, mucMenuItem, quitMenuItem});
 #endif
-            _overlay?.UpdateStatus(_status, _enabled);
         }
 
         public void StartThreads(SslStream incoming, SslStream outgoing)

@@ -105,17 +105,14 @@ namespace Deceive
             var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
             // Step 4: Start the Riot Client and wait for a connect.
-            var overlayEnabled = cmdArgs.All(x => x.ToLower() != "--no-overlay");
             var game = "league_of_legends";
             if (cmdArgs.Any(x => x.ToLower() == "lor"))
             {
-                overlayEnabled = false;
                 game = "bacon";
             }
 
             if (cmdArgs.Any(x => x.ToLower() == "valorant"))
             {
-                overlayEnabled = false;
                 game = "valorant";
             }
 
@@ -172,7 +169,7 @@ namespace Deceive
             sslOutgoing.AuthenticateAsClient(chatHost);
 
             // Step 7: All sockets are now connected, start tray icon.
-            var mainController = new MainController(overlayEnabled);
+            var mainController = new MainController();
             mainController.StartThreads(sslIncoming, sslOutgoing);
             mainController.ConnectionErrored += (sender, args) =>
             {
