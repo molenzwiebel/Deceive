@@ -114,11 +114,18 @@ namespace Deceive
                     {
                         var pasRequest = new HttpRequestMessage(HttpMethod.Get, "https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat");
                         pasRequest.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
-                        var pasJwt = await (await _client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
-                        Trace.WriteLine("PAS TOKEN:" + pasJwt);
-                        var affinity = new JsonWebToken(pasJwt).GetPayloadValue<string>("affinity");
-                        // replace fallback host with host by player affinity
-                        riotChatHost = affinities[affinity] as string;
+                        try
+                        {
+                            var pasJwt = await (await _client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
+                            Trace.WriteLine("PAS TOKEN:" + pasJwt);
+                            var affinity = new JsonWebToken(pasJwt).GetPayloadValue<string>("affinity");
+                            // replace fallback host with host by player affinity
+                            riotChatHost = affinities[affinity] as string;
+                        }
+                        catch (Exception)
+                        {
+                            Trace.WriteLine("Error getting player affinity token, using default chat server.");
+                        }
                     }
 
                     foreach (var key in new List<string>(affinities.Keys)) // clone to prevent concurrent modification
