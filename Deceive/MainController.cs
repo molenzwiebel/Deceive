@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Security;
 using System.Text;
@@ -27,6 +28,11 @@ namespace Deceive
         private bool _connected;
         private string _lastPresence; // we resend this if the state changes
 
+        private MenuItem _enabledMenuItem;
+        private MenuItem _chatStatus;
+        private MenuItem _offlineStatus;
+        private MenuItem _mobileStatus;
+
         internal event EventHandler ConnectionErrored;
 
         internal MainController()
@@ -51,10 +57,11 @@ namespace Deceive
                 Enabled = false
             };
 
-            var enabledMenuItem = new MenuItem("Enabled", (a, e) =>
+            _enabledMenuItem = new MenuItem("Enabled", (a, e) =>
             {
                 _enabled = !_enabled;
                 UpdateStatus(_enabled ? _status : "chat");
+                SendMessageFromFakePlayer(_enabled ? "Deceive is now enabled." : "Deceive is now disabled.");
                 UpdateTray();
             })
             {
@@ -70,7 +77,7 @@ namespace Deceive
                 Checked = _connectToMuc
             };
 
-            var chatStatus = new MenuItem("Online", (a, e) =>
+            _chatStatus = new MenuItem("Online", (a, e) =>
             {
                 UpdateStatus(_status = "chat");
                 _enabled = true;
@@ -80,7 +87,7 @@ namespace Deceive
                 Checked = _status.Equals("chat")
             };
 
-            var offlineStatus = new MenuItem("Offline", (a, e) =>
+            _offlineStatus = new MenuItem("Offline", (a, e) =>
             {
                 UpdateStatus(_status = "offline");
                 _enabled = true;
@@ -90,7 +97,7 @@ namespace Deceive
                 Checked = _status.Equals("offline")
             };
 
-            var mobileStatus = new MenuItem("Mobile", (a, e) =>
+            _mobileStatus = new MenuItem("Mobile", (a, e) =>
             {
                 UpdateStatus(_status = "mobile");
                 _enabled = true;
@@ -100,7 +107,7 @@ namespace Deceive
                 Checked = _status.Equals("mobile")
             };
 
-            var typeMenuItem = new MenuItem("Status Type", new[] {chatStatus, offlineStatus, mobileStatus});
+            var typeMenuItem = new MenuItem("Status Type", new[] {_chatStatus, _offlineStatus, _mobileStatus});
 
             var quitMenuItem = new MenuItem("Quit", (a, b) =>
             {
@@ -125,9 +132,9 @@ namespace Deceive
             var createFakePlayer = new MenuItem("Resend fake player", (a, e) => { CreateFakePlayer(); });
             var sendTestMsg = new MenuItem("Send message", (a, e) => { SendMessageFromFakePlayer("Test"); });
 
-            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, quitMenuItem});
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, _enabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, quitMenuItem});
 #else
-            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, enabledMenuItem, typeMenuItem, mucMenuItem, quitMenuItem});
+            _trayIcon.ContextMenu = new ContextMenu(new[] {aboutMenuItem, _enabledMenuItem, typeMenuItem, mucMenuItem, quitMenuItem});
 #endif
         }
 
@@ -163,6 +170,39 @@ namespace Deceive
                     }
                     else if (content.Contains("41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net"))
                     {
+                        if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "offline", CompareOptions.IgnoreCase) >= 0)
+                        {
+                            if (!_enabled) SendMessageFromFakePlayer("Deceive is now enabled.");
+                            _offlineStatus.PerformClick();
+                        }
+                        else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "mobile", CompareOptions.IgnoreCase) >= 0)
+                        {
+                            if (!_enabled) SendMessageFromFakePlayer("Deceive is now enabled.");
+                            _mobileStatus.PerformClick();
+                        }
+                        else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "online", CompareOptions.IgnoreCase) >= 0)
+                        {
+                            if (!_enabled) SendMessageFromFakePlayer("Deceive is now enabled.");
+                            _chatStatus.PerformClick();
+                        }
+                        else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "enable", CompareOptions.IgnoreCase) >= 0)
+                        {
+                            if (_enabled) SendMessageFromFakePlayer("Deceive is already enabled.");
+                            else _enabledMenuItem.PerformClick();
+                        }
+                        else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "disable", CompareOptions.IgnoreCase) >= 0)
+                        {
+                            if (!_enabled) SendMessageFromFakePlayer("Deceive is already disabled.");
+                            else _enabledMenuItem.PerformClick();
+                        }
+                        else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "status", CompareOptions.IgnoreCase) >= 0)
+                        {
+                            if (_status == "chat")
+                                SendMessageFromFakePlayer("You are appearing online.");
+                            else
+                                SendMessageFromFakePlayer("You are appearing " + _status + ".");
+                        }
+
                         //Don't send anything involving our fake user to chat servers
                         Trace.WriteLine("<!--RC TO SERVER REMOVED-->" + content);
                     }
@@ -179,7 +219,7 @@ namespace Deceive
             }
             finally
             {
-                Trace.WriteLine(@"Incoming closed.");
+                Trace.WriteLine("Incoming closed.");
                 SaveStatus();
                 if (_connected) OnConnectionErrored();
             }
@@ -199,12 +239,12 @@ namespace Deceive
                     Trace.WriteLine("<!--SERVER TO RC-->" + Encoding.UTF8.GetString(bytes, 0, byteCount));
                 } while (byteCount != 0 && _connected);
 
-                Trace.WriteLine(@"Outgoing closed.");
+                Trace.WriteLine("Outgoing closed.");
             }
             catch (Exception e)
             {
                 Trace.WriteLine(e);
-                Trace.WriteLine(@"Outgoing errored.");
+                Trace.WriteLine("Outgoing errored.");
                 SaveStatus();
                 if (_connected) OnConnectionErrored();
             }
@@ -277,7 +317,7 @@ namespace Deceive
             catch (Exception e)
             {
                 Trace.WriteLine(e);
-                Trace.WriteLine(@"Error rewriting presence.");
+                Trace.WriteLine("Error rewriting presence.");
             }
         }
 
@@ -335,7 +375,7 @@ namespace Deceive
 
         private void SendMessageFromFakePlayer(string message)
         {
-            var stamp = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            var stamp = DateTime.UtcNow.AddSeconds(1).ToString("yyyy-MM-dd HH:mm:ss.fff");
 
             var chatMessage =
                 $"<message from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' stamp='{stamp}' id='fake-{stamp}' type='chat'><body>{message}</body></message>";
