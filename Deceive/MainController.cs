@@ -270,7 +270,7 @@ namespace Deceive
                         xElement.WriteTo(xw);
                     }
                 }
-
+                
                 _outgoing.Write(Encoding.UTF8.GetBytes(sb.ToString()));
                 Trace.WriteLine("<!--DECEIVE TO SERVER-->" + sb);
             }
