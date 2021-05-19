@@ -148,7 +148,7 @@ namespace Deceive
                 // Show a message instead of failing silently.
                 MessageBox.Show(
                     "Deceive was unable to rewrite a League of Legends configuration file. This normally happens because Riot changed something on their end. " +
-                    "Please check if there's a new version of Deceive available, or contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord if there's not.\n\n" +
+                    "Please check if there's a new version of Deceive available, or contact the creator through GitHub (https://github.com/Ponita0/HideMyApp) or Discord if there's not.\n\n" +
                     ex,
                     StartupHandler.DeceiveTitle,
                     MessageBoxButtons.OK,

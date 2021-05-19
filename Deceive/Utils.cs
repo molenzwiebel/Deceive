@@ -38,7 +38,7 @@ namespace Deceive
             {
                 var httpClient = new HttpClient();
                 httpClient.DefaultRequestHeaders.UserAgent.Add(
-                    new ProductInfoHeaderValue("Deceive", DeceiveVersion));
+                    new ProductInfoHeaderValue("HideMyA**", DeceiveVersion));
 
                 var response =
                     await httpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
@@ -64,7 +64,7 @@ namespace Deceive
                 File.WriteAllText(persistencePath, latestVersion);
 
                 var result = MessageBox.Show(
-                    $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
+                    $"There is a new version of HideMyA** available: {latestVersion}. You are currently using HideMYA** {DeceiveVersion}. " +
                     $"Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\n" +
                     $"Press OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
                     StartupHandler.DeceiveTitle,

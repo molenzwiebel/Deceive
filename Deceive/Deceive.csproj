@@ -15,6 +15,7 @@
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyName>HideMyApp</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\server.pfx" />

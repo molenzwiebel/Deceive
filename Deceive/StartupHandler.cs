@@ -16,7 +16,7 @@ namespace Deceive
 {
     internal static class StartupHandler
     {
-        internal static string DeceiveTitle => "Deceive " + Utils.DeceiveVersion;
+        internal static string DeceiveTitle => "HideMyA** " + Utils.DeceiveVersion;
 
         [STAThread]
         private static void Main(string[] args)
@@ -31,8 +31,8 @@ namespace Deceive
                 Trace.WriteLine(ex);
                 // Show some kind of message so that Deceive doesn't just disappear.
                 MessageBox.Show(
-                    "Deceive encountered an error and couldn't properly initialize itself. " +
-                    "Please contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord.\n\n" + ex,
+                    "حصل مشكله يكينج ... البرنامج فيه حاجه مانعاه يشتغل" +
+                    "Please contact the creator through GitHub (https://github.com/Ponita0/HideMyApp) or Discord.\n\n" + ex,
                     DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error,
@@ -50,8 +50,8 @@ namespace Deceive
             if (Utils.IsClientRunning() && cmdArgs.All(x => x.ToLower() != "--allow-multiple-clients"))
             {
                 var result = MessageBox.Show(
-                    "The Riot Client is currently running. In order to mask your online status, the Riot Client needs to be started by Deceive. " +
-                    "Do you want Deceive to stop the Riot Client and games launched by it, so that it can restart with the proper configuration?",
+                    "كلاينت ليج شغال دلوقتي ... بس علشان أقدر أتحكم في كونك أونلاين أو أوفلاين لازم الكلاينت يشتغل بطريقه معينه ... أنا هشغله أنا .... أقفله ؟" 
+                   ,
                     DeceiveTitle,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question,
@@ -90,8 +90,8 @@ namespace Deceive
             if (riotClientPath == null)
             {
                 MessageBox.Show(
-                    "Deceive was unable to find the path to the Riot Client. If you have the game installed and it is working properly, " +
-                    "please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
+                    "HideMyA** was unable to find the path to the Riot Client. If you have the game installed and it is working properly, " +
+                    "please file a bug report through GitHub (https://github.com/Ponita0/HideMyApp) or Discord.",
                     DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error,
@@ -153,9 +153,9 @@ namespace Deceive
             if (chatHost == null)
             {
                 MessageBox.Show(
-                    "Deceive was unable to find Riot's chat server, please try again later. " +
-                    "If this issue persists and you can connect to chat normally without Deceive, " +
-                    "please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
+                    "HideMyA** was unable to find Riot's chat server, please try again later. " +
+                    "If this issue persists and you can connect to chat normally without HideMyA**, " +
+                    "please file a bug report through GitHub (https://github.com/Ponita0/HideMyApp) or Discord.",
                     DeceiveTitle,
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error,
@@ -193,9 +193,9 @@ namespace Deceive
                     {
                         Trace.WriteLine(e);
                         var result = MessageBox.Show(
-                            "Unable to reconnect to the chat server. Please check your internet connection." +
-                            "If this issue persists and you can connect to chat normally without Deceive, " +
-                            "please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
+                           "HideMyA** was unable to find Riot's chat server, please try again later. " +
+                    "If this issue persists and you can connect to chat normally without HideMyA**, " +
+                    "please file a bug report through GitHub (https://github.com/Ponita0/HideMyApp) or Discord.",
                             DeceiveTitle,
                             MessageBoxButtons.RetryCancel,
                             MessageBoxIcon.Error,
