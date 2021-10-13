@@ -19,11 +19,11 @@ namespace Deceive
         private readonly HttpClient _client = new HttpClient();
         internal int ConfigPort { get; }
 
-        internal event EventHandler<ChatServerEventArgs> PatchedChatServer;
+        internal event EventHandler<ChatServerEventArgs>? PatchedChatServer;
 
         internal class ChatServerEventArgs : EventArgs
         {
-            internal string ChatHost { get; set; }
+            internal string? ChatHost { get; set; }
             internal int ChatPort { get; set; }
         }
 
@@ -88,7 +88,7 @@ namespace Deceive
             {
                 var configObject = (JsonObject) SimpleJson.DeserializeObject(content);
 
-                string riotChatHost = null;
+                string? riotChatHost = null;
                 var riotChatPort = 0;
 
                 // Set fallback host to localhost.

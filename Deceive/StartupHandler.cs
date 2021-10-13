@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -141,7 +141,7 @@ namespace Deceive
             }
 
             // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
-            string chatHost = null;
+            string? chatHost = null;
             var chatPort = 0;
             proxyServer.PatchedChatServer += (sender, args) =>
             {

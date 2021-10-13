@@ -65,8 +65,8 @@ namespace Deceive
 
                 var result = MessageBox.Show(
                     $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
-                    $"Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\n" +
-                    $"Press OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
+                    "Deceive updates usually fix critical bugs or adapt to changes by Riot, so it is recommended that you install the latest version.\n\n" +
+                    "Press OK to visit the download page, or press Cancel to continue. Don't worry, we won't bother you with this message again if you press cancel.",
                     StartupHandler.DeceiveTitle,
                     MessageBoxButtons.OKCancel,
                     MessageBoxIcon.Information,
@@ -112,7 +112,7 @@ namespace Deceive
 
         // Checks for any installed Riot Client configuration,
         // and returns the path of the client if it does. Else, returns null.
-        public static string GetRiotClientPath()
+        public static string? GetRiotClientPath()
         {
             // Find the RiotClientInstalls file.
             var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),

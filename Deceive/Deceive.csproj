@@ -6,6 +6,7 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
+    <Nullable>annotations</Nullable>
   </PropertyGroup>
   <PropertyGroup>
     <StartupObject />
@@ -28,18 +29,11 @@
     <EmbeddedResource Include="Resources\deceive.ico" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Costura.Fody" Version="4.1.0" />
+    <PackageReference Include="Costura.Fody" Version="5.6.0">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
     <PackageReference Include="EmbedIO" Version="3.4.3" />
-    <PackageReference Include="Fody" Version="6.1.1" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="SimpleJson" Version="0.38.0" />
-    <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.5.0" />
-    <PackageReference Include="System.Management" Version="4.7.0" />
-    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
-    <PackageReference Include="Unosquare.Swan.Lite" Version="3.0.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="System.Net.Http" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.13.1" />
   </ItemGroup>
 </Project>

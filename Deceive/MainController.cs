@@ -33,7 +33,7 @@ namespace Deceive
         private MenuItem _offlineStatus;
         private MenuItem _mobileStatus;
 
-        internal event EventHandler ConnectionErrored;
+        internal event EventHandler? ConnectionErrored;
 
         internal MainController()
         {
