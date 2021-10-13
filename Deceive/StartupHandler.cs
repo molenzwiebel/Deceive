@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -105,7 +105,11 @@ namespace Deceive
             var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
             // Step 4: Start the Riot Client and wait for a connect.
-            var game = "league_of_legends";
+            string? game = null;
+            if (cmdArgs.Any(x => x.ToLower() == "lol"))
+            {
+                game = "league_of_legends";
+            }
             if (cmdArgs.Any(x => x.ToLower() == "lor"))
             {
                 game = "bacon";
@@ -119,8 +123,10 @@ namespace Deceive
             var startArgs = new ProcessStartInfo
             {
                 FileName = riotClientPath,
-                Arguments = $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\" --launch-product={game} --launch-patchline=live"
+                Arguments = $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\""
             };
+
+            if (game != null) startArgs.Arguments += $" --launch-product={game} --launch-patchline=live";
             if (cmdArgs.Any(x => x.ToLower() == "--allow-multiple-clients")) startArgs.Arguments += " --allow-multiple-clients";
             var riotClient = Process.Start(startArgs);
             // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
