@@ -47,6 +47,27 @@ namespace Deceive
                 .WithModule(new ActionModule("/", HttpVerbs.Get,
                     ctx => ProxyAndRewriteResponse(configUrl, chatPort, ctx)));
 
+            // For anything older than Windows 10, use TLS 1.2 and disable certificate validation.
+            // Needs entries uncommented in app.manifest to detect the OS version properly.
+            if (Environment.OSVersion.Version.Major < 10)
+            {
+                Trace.WriteLine("Found OS older than Windows 10: Use TLS 1.2 and disable certificate validation.");
+                ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+                ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+            }
+
+            // Catch exceptions in ProxyAndRewriteResponse
+            server.OnHttpException += (context, exception) => 
+            { 
+                Trace.WriteLine(exception);
+                return Task.CompletedTask;
+            };
+            server.OnUnhandledException += (context, exception) =>
+            {
+                Trace.WriteLine(exception);
+                return Task.CompletedTask;
+            };
+
             // Run this on a new thread, just for the sake of it.
             // It seemed to be buggy if run on the same thread.
             var thread = new Thread(() => { server.RunAsync().Wait(); }) {IsBackground = true};
@@ -62,6 +83,7 @@ namespace Deceive
         private async Task ProxyAndRewriteResponse(string configUrl, int chatPort, IHttpContext ctx)
         {
             var url = configUrl + ctx.Request.RawUrl;
+            Trace.WriteLine("Received client proxy request to URL: " + url);
 
             using var message = new HttpRequestMessage(HttpMethod.Get, url);
             // Cloudflare bitches at us without a user agent.
@@ -80,6 +102,7 @@ namespace Deceive
             }
 
             var result = await _client.SendAsync(message);
+            Trace.WriteLine("Received response from clientconfig service with status code: " + result.StatusCode);
             var content = await result.Content.ReadAsStringAsync();
             var modifiedContent = content;
             Trace.WriteLine("ORIGINAL CLIENTCONFIG: " + content);

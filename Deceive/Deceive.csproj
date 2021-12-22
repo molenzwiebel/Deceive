@@ -29,11 +29,11 @@
     <EmbeddedResource Include="Resources\deceive.ico" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Costura.Fody" Version="5.6.0">
+    <PackageReference Include="Costura.Fody" Version="5.7.0">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="EmbedIO" Version="3.4.3" />
     <PackageReference Include="SimpleJson" Version="0.38.0" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.13.1" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.15.0" />
   </ItemGroup>
 </Project>

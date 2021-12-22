@@ -82,6 +82,7 @@ namespace Deceive
             var listener = new TcpListener(IPAddress.Loopback, 0);
             listener.Start();
             var port = ((IPEndPoint) listener.LocalEndpoint).Port;
+            Trace.WriteLine($"Client configuration proxy listening on port {port}");
 
             // Step 2: Find the Riot Client.
             var riotClientPath = Utils.GetRiotClientPath();
@@ -128,6 +129,7 @@ namespace Deceive
 
             if (game != null) startArgs.Arguments += $" --launch-product={game} --launch-patchline=live";
             if (cmdArgs.Any(x => x.ToLower() == "--allow-multiple-clients")) startArgs.Arguments += " --allow-multiple-clients";
+            Trace.WriteLine($"About to launch Riot Client with parameters:\n{startArgs.Arguments}");
             var riotClient = Process.Start(startArgs);
             // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
             if (riotClient != null)
@@ -145,11 +147,14 @@ namespace Deceive
             var chatPort = 0;
             proxyServer.PatchedChatServer += (sender, args) =>
             {
+                Trace.WriteLine($"The original chat server details were {chatHost}:{chatPort}");
                 chatHost = args.ChatHost;
                 chatPort = args.ChatPort;
             };
 
+            Trace.WriteLine("Waiting for client to connect to chat server...");
             var incoming = listener.AcceptTcpClient();
+            Trace.WriteLine("Client connected!");
 
             // Step 6: Connect sockets.
             var sslIncoming = new SslStream(incoming.GetStream());
