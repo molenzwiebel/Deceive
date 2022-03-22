@@ -5,8 +5,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
-using System.Runtime.ExceptionServices;
-using System.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Windows.Forms;
@@ -22,6 +20,8 @@ namespace Deceive
         private static void Main(string[] args)
         {
             AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
+            Application.EnableVisualStyles();
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
             try
             {
                 StartDeceive(args);
@@ -66,7 +66,7 @@ namespace Deceive
             try
             {
                 File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
-                Debug.Listeners.Add(new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log")));
+                Trace.Listeners.Add(new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log")));
                 Debug.AutoFlush = true;
                 Trace.WriteLine(DeceiveTitle);
             }
@@ -135,7 +135,7 @@ namespace Deceive
             if (riotClient != null)
             {
                 riotClient.EnableRaisingEvents = true;
-                riotClient.Exited += (sender, args) =>
+                riotClient.Exited += (_, _) =>
                 {
                     Trace.WriteLine("Exiting on Riot Client exit.");
                     Environment.Exit(0);
@@ -145,7 +145,7 @@ namespace Deceive
             // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
             string? chatHost = null;
             var chatPort = 0;
-            proxyServer.PatchedChatServer += (sender, args) =>
+            proxyServer.PatchedChatServer += (_, args) =>
             {
                 Trace.WriteLine($"The original chat server details were {chatHost}:{chatPort}");
                 chatHost = args.ChatHost;
@@ -182,7 +182,7 @@ namespace Deceive
             // Step 7: All sockets are now connected, start tray icon.
             var mainController = new MainController();
             mainController.StartThreads(sslIncoming, sslOutgoing);
-            mainController.ConnectionErrored += (sender, args) =>
+            mainController.ConnectionErrored += (_, _) =>
             {
                 Trace.WriteLine("Trying to reconnect.");
                 sslIncoming.Close();
@@ -223,11 +223,9 @@ namespace Deceive
                 sslOutgoing.AuthenticateAsClient(chatHost);
                 mainController.StartThreads(sslIncoming, sslOutgoing);
             };
-            Application.EnableVisualStyles();
             Application.Run(mainController);
         }
 
-        [HandleProcessCorruptedStateExceptions, SecurityCritical]
         private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
             //Log all unhandled exceptions

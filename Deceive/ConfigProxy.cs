@@ -1,30 +1,31 @@
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using EmbedIO;
 using EmbedIO.Actions;
-using Microsoft.IdentityModel.JsonWebTokens;
 
 namespace Deceive
 {
     internal class ConfigProxy
     {
-        private readonly HttpClient _client = new HttpClient();
+        private readonly HttpClient _client = new();
         internal int ConfigPort { get; }
 
         internal event EventHandler<ChatServerEventArgs>? PatchedChatServer;
 
         internal class ChatServerEventArgs : EventArgs
         {
-            internal string? ChatHost { get; set; }
-            internal int ChatPort { get; set; }
+            internal string? ChatHost { get; init; }
+            internal int ChatPort { get; init; }
         }
 
         /**
@@ -37,7 +38,7 @@ namespace Deceive
             // Find a free port.
             var l = new TcpListener(IPAddress.Loopback, 0);
             l.Start();
-            var port = ((IPEndPoint) l.LocalEndpoint).Port;
+            var port = ((IPEndPoint)l.LocalEndpoint).Port;
             l.Stop();
 
             // Start a web server that sends everything to ProxyAndRewriteResponse
@@ -53,16 +54,16 @@ namespace Deceive
             {
                 Trace.WriteLine("Found OS older than Windows 10: Use TLS 1.2 and disable certificate validation.");
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-                ServicePointManager.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) => true;
+                ServicePointManager.ServerCertificateValidationCallback = (_, _, _, _) => true;
             }
 
             // Catch exceptions in ProxyAndRewriteResponse
-            server.OnHttpException += (context, exception) => 
-            { 
+            server.OnHttpException += (_, exception) =>
+            {
                 Trace.WriteLine(exception);
                 return Task.CompletedTask;
             };
-            server.OnUnhandledException += (context, exception) =>
+            server.OnUnhandledException += (_, exception) =>
             {
                 Trace.WriteLine(exception);
                 return Task.CompletedTask;
@@ -70,7 +71,7 @@ namespace Deceive
 
             // Run this on a new thread, just for the sake of it.
             // It seemed to be buggy if run on the same thread.
-            var thread = new Thread(() => { server.RunAsync().Wait(); }) {IsBackground = true};
+            var thread = new Thread(() => { server.RunAsync().Wait(); }) { IsBackground = true };
             thread.Start();
 
             ConfigPort = port;
@@ -111,66 +112,72 @@ namespace Deceive
 
             try
             {
-                var configObject = (JsonObject) SimpleJson.DeserializeObject(content);
+                var configObject = JsonSerializer.Deserialize<JsonNode>(content);
 
                 string? riotChatHost = null;
                 var riotChatPort = 0;
 
                 // Set fallback host to localhost.
-                if (configObject.ContainsKey("chat.host"))
+                if (configObject?["chat.host"] != null)
                 {
                     // Save fallback host
-                    riotChatHost = configObject["chat.host"].ToString();
+                    riotChatHost = configObject["chat.host"]!.GetValue<string>();
                     configObject["chat.host"] = "127.0.0.1";
                 }
 
                 // Set chat port.
-                if (configObject.ContainsKey("chat.port"))
+                if (configObject?["chat.port"] != null)
                 {
-                    riotChatPort = int.Parse(configObject["chat.port"].ToString());
+                    riotChatPort = configObject["chat.port"]!.GetValue<int>();
                     configObject["chat.port"] = chatPort;
                 }
 
                 // Set chat.affinities (a dictionary) to all localhost.
-                if (configObject.ContainsKey("chat.affinities"))
+                if (configObject?["chat.affinities"] != null)
                 {
-                    var affinities = (JsonObject) configObject["chat.affinities"];
-                    if ((bool) configObject["chat.affinity.enabled"])
+                    var affinities = configObject["chat.affinities"];
+                    if (configObject["chat.affinity.enabled"]?.GetValue<bool>() ?? false)
                     {
                         var pasRequest = new HttpRequestMessage(HttpMethod.Get, "https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat");
                         pasRequest.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
                         try
                         {
                             var pasJwt = await (await _client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
-                            Trace.WriteLine("PAS TOKEN:" + pasJwt);
-                            var affinity = new JsonWebToken(pasJwt).GetPayloadValue<string>("affinity");
+                            Trace.WriteLine("PAS JWT:" + pasJwt);
+                            var pasJwtContent = pasJwt.Split('.')[1];
+                            var validBase64 = pasJwtContent.PadRight(pasJwtContent.Length / 4 * 4 + (pasJwtContent.Length % 4 == 0 ? 0 : 4), '=');
+                            var pasJwtString = Encoding.UTF8.GetString(Convert.FromBase64String(validBase64));
+                            var pasJwtJson = JsonSerializer.Deserialize<JsonNode>(pasJwtString);
+                            var affinity = pasJwtJson?["affinity"]?.GetValue<string>();
                             // replace fallback host with host by player affinity
-                            riotChatHost = affinities[affinity] as string;
+                            if (affinity != null)
+                            {
+                                riotChatHost = affinities?[affinity]?.GetValue<string>();
+                                Trace.WriteLine($"AFFINITY: {affinity} -> {riotChatHost}");
+                            }
                         }
-                        catch (Exception)
+                        catch (Exception e)
                         {
                             Trace.WriteLine("Error getting player affinity token, using default chat server.");
+                            Trace.WriteLine(e);
                         }
                     }
 
-                    foreach (var key in new List<string>(affinities.Keys)) // clone to prevent concurrent modification
-                    {
-                        affinities[key] = "127.0.0.1";
-                    }
+                    affinities?.AsObject().Select(pair => pair.Key).ToList().ForEach(s => affinities[s] = "127.0.0.1");
                 }
 
                 // Allow an invalid cert.
-                if (configObject.ContainsKey("chat.allow_bad_cert.enabled"))
+                if (configObject?["chat.allow_bad_cert.enabled"] != null)
                 {
                     configObject["chat.allow_bad_cert.enabled"] = true;
                 }
 
-                modifiedContent = SimpleJson.SerializeObject(configObject);
+                modifiedContent = JsonSerializer.Serialize(configObject);
                 Trace.WriteLine("MODIFIED CLIENTCONFIG: " + modifiedContent);
 
                 if (riotChatHost != null && riotChatPort != 0)
                 {
-                    PatchedChatServer?.Invoke(this, new ChatServerEventArgs {ChatHost = riotChatHost, ChatPort = riotChatPort});
+                    PatchedChatServer?.Invoke(this, new ChatServerEventArgs { ChatHost = riotChatHost, ChatPort = riotChatPort });
                 }
             }
             catch (Exception ex)
@@ -196,11 +203,11 @@ namespace Deceive
             RESPOND:
             var responseBytes = Encoding.UTF8.GetBytes(modifiedContent);
 
-            ctx.Response.StatusCode = (int) result.StatusCode;
+            ctx.Response.StatusCode = (int)result.StatusCode;
             ctx.Response.SendChunked = false;
             ctx.Response.ContentLength64 = responseBytes.Length;
             ctx.Response.ContentType = "application/json";
-            await ctx.Response.OutputStream.WriteAsync(responseBytes, 0, responseBytes.Length);
+            await ctx.Response.OutputStream.WriteAsync(responseBytes);
             ctx.Response.OutputStream.Close();
         }
     }

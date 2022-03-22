@@ -6,6 +6,8 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Windows.Forms;
 
 namespace Deceive
@@ -18,7 +20,8 @@ namespace Deceive
         {
             get
             {
-                var version = Assembly.GetEntryAssembly()!.GetName().Version;
+                var version = Assembly.GetEntryAssembly()?.GetName().Version;
+                if (version == null) return "v0.0.0";
                 return "v" + version.Major + "." + version.Minor + "." + version.Build;
             }
         }
@@ -43,8 +46,8 @@ namespace Deceive
                 var response =
                     await httpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
                 var content = await response.Content.ReadAsStringAsync();
-                dynamic release = SimpleJson.DeserializeObject(content);
-                string latestVersion = release["tag_name"];
+                var release = JsonSerializer.Deserialize<JsonNode>(content);
+                var latestVersion = release?["tag_name"]?.ToString();
 
                 // If failed to fetch or already latest or newer, return.
                 if (latestVersion == null) return;
@@ -55,13 +58,13 @@ namespace Deceive
 
                 // Check if we have shown this before.
                 var persistencePath = Path.Combine(DataDir, "updateVersionPrompted");
-                var latestShownVersion = File.Exists(persistencePath) ? File.ReadAllText(persistencePath) : "";
+                var latestShownVersion = File.Exists(persistencePath) ? await File.ReadAllTextAsync(persistencePath) : "";
 
                 // If we have, return.
                 if (latestShownVersion == latestVersion) return;
 
                 // Show a message and record the latest shown.
-                File.WriteAllText(persistencePath, latestVersion);
+                await File.WriteAllTextAsync(persistencePath, latestVersion);
 
                 var result = MessageBox.Show(
                     $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
@@ -76,7 +79,7 @@ namespace Deceive
                 if (result == DialogResult.OK)
                 {
                     // Open the url in the browser.
-                    Process.Start(release["html_url"]);
+                    Process.Start(release?["html_url"]?.ToString()!);
                 }
             }
             catch
@@ -87,7 +90,7 @@ namespace Deceive
 
         private static IEnumerable<Process> GetProcesses()
         {
-            var riotCandidates = Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Where(process => process.Id != Process.GetCurrentProcess().Id).ToList();
+            var riotCandidates = Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Where(process => process.Id != Environment.ProcessId).ToList();
             riotCandidates.AddRange(Process.GetProcessesByName("LeagueClient"));
             riotCandidates.AddRange(Process.GetProcessesByName("LoR"));
             riotCandidates.AddRange(Process.GetProcessesByName("VALORANT-Win64-Shipping"));
@@ -119,12 +122,13 @@ namespace Deceive
                 "Riot Games/RiotClientInstalls.json");
             if (!File.Exists(installPath)) return null;
 
-            var data = (JsonObject) SimpleJson.DeserializeObject(File.ReadAllText(installPath));
-            var rcPaths = new List<string>();
-
-            if (data.ContainsKey("rc_default")) rcPaths.Add(data["rc_default"].ToString());
-            if (data.ContainsKey("rc_live")) rcPaths.Add(data["rc_live"].ToString());
-            if (data.ContainsKey("rc_beta")) rcPaths.Add(data["rc_beta"].ToString());
+            var data = JsonSerializer.Deserialize<JsonNode>(File.ReadAllText(installPath));
+            var rcPaths = new List<string?>
+            {
+                data?["rc_default"]?.ToString(),
+                data?["rc_live"]?.ToString(),
+                data?["rc_beta"]?.ToString()
+            };
 
             return rcPaths.FirstOrDefault(File.Exists);
         }
