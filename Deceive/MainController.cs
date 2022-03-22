@@ -136,7 +136,7 @@ internal class MainController : ApplicationContext
 
         TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, quitMenuItem });
 #else
-            _trayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] {aboutMenuItem, _enabledMenuItem, typeMenuItem, mucMenuItem, quitMenuItem});
+        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] {aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, quitMenuItem});
 #endif
     }
 
