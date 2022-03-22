@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net;
@@ -107,6 +107,8 @@ namespace Deceive
             var modifiedContent = content;
             Trace.WriteLine("ORIGINAL CLIENTCONFIG: " + content);
 
+            if (!result.IsSuccessStatusCode) goto RESPOND;
+
             try
             {
                 var configObject = (JsonObject) SimpleJson.DeserializeObject(content);
@@ -191,6 +193,7 @@ namespace Deceive
 
             // Using the builtin EmbedIO methods for sending the response adds some garbage in the front of it.
             // This seems to do the trick.
+            RESPOND:
             var responseBytes = Encoding.UTF8.GetBytes(modifiedContent);
 
             ctx.Response.StatusCode = (int) result.StatusCode;
