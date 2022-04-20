@@ -1,45 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFramework>net6.0-windows</TargetFramework>
     <OutputType>WinExe</OutputType>
-    <LangVersion>8</LangVersion>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
-    <UseWPF>true</UseWPF>
-  </PropertyGroup>
-  <PropertyGroup>
-    <StartupObject />
-  </PropertyGroup>
-  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <AssemblyVersion>1.11.0.0</AssemblyVersion>
     <ApplicationIcon>Resources\deceive.ico</ApplicationIcon>
-  </PropertyGroup>
-  <PropertyGroup>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\server.pfx" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Update="FodyWeavers.xml">
-      <SubType>Designer</SubType>
-    </None>
-  </ItemGroup>
-  <ItemGroup>
     <EmbeddedResource Include="Resources\deceive.ico" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="Costura.Fody" Version="4.1.0" />
     <PackageReference Include="EmbedIO" Version="3.4.3" />
-    <PackageReference Include="Fody" Version="6.1.1" />
-    <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
-    <PackageReference Include="SimpleJson" Version="0.38.0" />
-    <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
-    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="6.5.0" />
-    <PackageReference Include="System.Management" Version="4.7.0" />
-    <PackageReference Include="System.ValueTuple" Version="4.5.0" />
-    <PackageReference Include="Unosquare.Swan.Lite" Version="3.0.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="System.Net.Http" />
   </ItemGroup>
 </Project>
