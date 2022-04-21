@@ -18,7 +18,7 @@ internal class MainController : ApplicationContext
     private NotifyIcon TrayIcon { get; }
     private bool Enabled { get; set; } = true;
     private string Status { get; set; } = null!;
-    private string StatusFile { get; } = Path.Combine(Utils.DataDir, "status");
+    private string StatusFile { get; } = Path.Combine(Persistence.DataDir, "status");
     private bool ConnectToMuc { get; set; } = true;
     private bool CreatedFakePlayer { get; set; }
     private bool SentIntroductionText { get; set; }
@@ -109,6 +109,26 @@ internal class MainController : ApplicationContext
 
         var typeMenuItem = new ToolStripMenuItem("Status Type", null, ChatStatus, OfflineStatus, MobileStatus);
 
+        var restartWithDifferentGameItem = new ToolStripMenuItem("Restart and launch a different game", null, (_, _) =>
+        {
+            var result = MessageBox.Show(
+                "Restart Deceive to launch a different game? This will also stop related games if they are running.",
+                StartupHandler.DeceiveTitle,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1
+            );
+
+            if (result != DialogResult.Yes) return;
+
+            Utils.KillProcesses();
+            Thread.Sleep(2000);
+
+            Persistence.SetDefaultLaunchGame(LaunchGame.Prompt);
+            Process.Start(Application.ExecutablePath);
+            Environment.Exit(0);
+        });
+
         var quitMenuItem = new ToolStripMenuItem("Quit", null, (_, _) =>
         {
             var result = MessageBox.Show(
@@ -134,9 +154,9 @@ internal class MainController : ApplicationContext
         var createFakePlayer = new ToolStripMenuItem("Resend fake player", null, (_, _) => { CreateFakePlayer(); });
         var sendTestMsg = new ToolStripMenuItem("Send message", null, (_, _) => { SendMessageFromFakePlayer("Test"); });
 
-        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, quitMenuItem });
+        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, restartWithDifferentGameItem, quitMenuItem });
 #else
-        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] {aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, quitMenuItem});
+        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] {aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem});
 #endif
     }
 

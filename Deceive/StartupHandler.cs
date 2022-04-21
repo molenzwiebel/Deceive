@@ -14,17 +14,22 @@ namespace Deceive;
 
 internal static class StartupHandler
 {
-    internal static string DeceiveTitle => "Deceive " + Utils.DeceiveVersion;
+    public static string DeceiveTitle => "Deceive " + Utils.DeceiveVersion;
 
+    // Arguments are parsed through System.CommandLine.DragonFruit.
+    /// <param name="args">The game to be launched, or automatically determined if not passed.</param>
+    /// <param name="gamePatchline">The patchline to be used for launching the game.</param>
+    /// <param name="riotClientParams">Any extra parameters to be passed to the Riot Client.</param>
+    /// <param name="gameParams">Any extra parameters to be passed to the launched game.</param>
     [STAThread]
-    private static void Main(string[] args)
+    public static void Main(LaunchGame args = LaunchGame.Auto, string gamePatchline = "live", string? riotClientParams = null, string? gameParams = null)
     {
         AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
         Application.EnableVisualStyles();
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         try
         {
-            StartDeceive(args);
+            StartDeceive(args, gamePatchline, riotClientParams, gameParams);
         }
         catch (Exception ex)
         {
@@ -44,10 +49,11 @@ internal static class StartupHandler
     /**
          * Actual main function. Wrapped into a separate function so we can catch exceptions.
          */
-    private static void StartDeceive(string[] cmdArgs)
+    private static void StartDeceive(LaunchGame game, string gamePatchline, string? riotClientParams, string? gameParams)
     {
-        // We are supposed to launch league, so if it's already running something is going wrong.
-        if (Utils.IsClientRunning() && cmdArgs.All(x => x.ToLower() != "--allow-multiple-clients"))
+        // Refuse to do anything if the client is already running, unless we're specifically
+        // allowing that through League/RC's --allow-multiple-clients.
+        if (Utils.IsClientRunning() && !(riotClientParams?.Contains("allow-multiple-clients") ?? false))
         {
             var result = MessageBox.Show(
                 "The Riot Client is currently running. In order to mask your online status, the Riot Client needs to be started by Deceive. " +
@@ -65,8 +71,8 @@ internal static class StartupHandler
 
         try
         {
-            File.WriteAllText(Path.Combine(Utils.DataDir, "debug.log"), string.Empty);
-            Trace.Listeners.Add(new TextWriterTraceListener(Path.Combine(Utils.DataDir, "debug.log")));
+            File.WriteAllText(Path.Combine(Persistence.DataDir, "debug.log"), string.Empty);
+            Trace.Listeners.Add(new TextWriterTraceListener(Path.Combine(Persistence.DataDir, "debug.log")));
             Debug.AutoFlush = true;
             Trace.WriteLine(DeceiveTitle);
         }
@@ -91,8 +97,8 @@ internal static class StartupHandler
         if (riotClientPath == null)
         {
             MessageBox.Show(
-                "Deceive was unable to find the path to the Riot Client. If you have the game installed and it is working properly, " +
-                "please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
+                "Deceive was unable to find the path to the Riot Client. Usually this can be resolved by launching any Riot Games game once, then launching Deceive again." +
+                "If this does not resolve the issue, please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
                 DeceiveTitle,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error,
@@ -102,33 +108,59 @@ internal static class StartupHandler
             return;
         }
 
+        // If launching "auto", use the persisted launch game (which defaults to prompt).
+        if (game == LaunchGame.Auto)
+        {
+            game = Persistence.GetDefaultLaunchGame();
+        }
+
+        // If prompt, display dialog.
+        if (game == LaunchGame.Prompt)
+        {
+            new GamePromptForm().ShowDialog();
+            game = GamePromptForm.SelectedGame;
+        }
+
+        // If we don't have a concrete game by now, the user has cancelled and nothing we can do.
+        if (game == LaunchGame.Prompt || game == LaunchGame.Auto)
+        {
+            return;
+        }
+
+        var launchProduct = game switch
+        {
+            LaunchGame.LoL => "league_of_legends",
+            LaunchGame.LoR => "bacon",
+            LaunchGame.VALORANT => "valorant",
+            LaunchGame.RiotClient => null,
+            var x => throw new Exception("Unexpected LaunchGame: " + x)
+        };
+
         // Step 3: Start proxy web server for clientconfig
         var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
 
-        // Step 4: Start the Riot Client and wait for a connect.
-        string? game = null;
-        if (cmdArgs.Any(x => x.ToLower() == "lol"))
-        {
-            game = "league_of_legends";
-        }
-        if (cmdArgs.Any(x => x.ToLower() == "lor"))
-        {
-            game = "bacon";
-        }
-
-        if (cmdArgs.Any(x => x.ToLower() == "valorant"))
-        {
-            game = "valorant";
-        }
-
+        // Step 4: Launch Riot Client (+game)
         var startArgs = new ProcessStartInfo
         {
             FileName = riotClientPath,
             Arguments = $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\""
         };
 
-        if (game != null) startArgs.Arguments += $" --launch-product={game} --launch-patchline=live";
-        if (cmdArgs.Any(x => x.ToLower() == "--allow-multiple-clients")) startArgs.Arguments += " --allow-multiple-clients";
+        if (launchProduct != null)
+        {
+            startArgs.Arguments += $" --launch-product={launchProduct} --launch-patchline={gamePatchline}";
+        }
+
+        if (riotClientParams != null)
+        {
+            startArgs.Arguments += $" {riotClientParams}";
+        }
+
+        if (gameParams != null)
+        {
+            startArgs.Arguments += $" -- {gameParams}";
+        }
+
         Trace.WriteLine($"About to launch Riot Client with parameters:\n{startArgs.Arguments}");
         var riotClient = Process.Start(startArgs);
         // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
@@ -138,6 +170,7 @@ internal static class StartupHandler
             riotClient.Exited += (_, _) =>
             {
                 Trace.WriteLine("Exiting on Riot Client exit.");
+                Thread.Sleep(3000); // in case of restart, let us kill ourselves elsewhere
                 Environment.Exit(0);
             };
         }
@@ -232,4 +265,41 @@ internal static class StartupHandler
         Trace.WriteLine(e.ExceptionObject as Exception);
         Trace.WriteLine(Environment.StackTrace);
     }
+}
+
+/// <summary>
+/// Which game to automatically launch when Deceive is started.
+/// </summary>
+public enum LaunchGame
+{
+    /// <summary>
+    /// Attempt to start League of Legends.
+    /// </summary>
+    LoL,
+
+    /// <summary>
+    /// Attempt to start Legends of Runeterra.
+    /// </summary>
+    LoR,
+
+    /// <summary>
+    /// Attempt to start VALORANT.
+    /// </summary>
+    VALORANT,
+
+    /// <summary>
+    /// Attempt to launch the Riot Client.
+    /// </summary>
+    RiotClient,
+
+    /// <summary>
+    /// Display a dialog asking which game to launch.
+    /// </summary>
+    Prompt,
+
+    /// <summary>
+    /// Automatically pick which game to launch, using either the configured
+    /// default launch method or prompting, depending on previous runs.
+    /// </summary>
+    Auto
 }

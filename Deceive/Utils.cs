@@ -14,8 +14,6 @@ namespace Deceive;
 
 internal static class Utils
 {
-    internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
-
     internal static string DeceiveVersion
     {
         get
@@ -24,11 +22,6 @@ internal static class Utils
             if (version == null) return "v0.0.0";
             return "v" + version.Major + "." + version.Minor + "." + version.Build;
         }
-    }
-
-    static Utils()
-    {
-        if (!Directory.Exists(DataDir)) Directory.CreateDirectory(DataDir);
     }
 
     /**
@@ -57,14 +50,13 @@ internal static class Utils
             if (assemblyVersion.CompareTo(githubVersion) != -1) return;
 
             // Check if we have shown this before.
-            var persistencePath = Path.Combine(DataDir, "updateVersionPrompted");
-            var latestShownVersion = File.Exists(persistencePath) ? await File.ReadAllTextAsync(persistencePath) : "";
+            var latestShownVersion = Persistence.GetPromptedUpdateVersion();
 
             // If we have, return.
-            if (latestShownVersion == latestVersion) return;
+            if (latestShownVersion != null && latestShownVersion == latestVersion) return;
 
             // Show a message and record the latest shown.
-            await File.WriteAllTextAsync(persistencePath, latestVersion);
+            Persistence.SetPromptedUpdateVersion(latestVersion);
 
             var result = MessageBox.Show(
                 $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
