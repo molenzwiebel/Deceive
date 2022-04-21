@@ -48,6 +48,8 @@ internal class MainController : ApplicationContext
 
         LoadStatus();
         UpdateTray();
+
+        UpdateValorantPresenceAfterDelay();
     }
 
     private void UpdateTray()
@@ -347,8 +349,17 @@ internal class MainController : ApplicationContext
     {
         CreatedFakePlayer = true;
 
-        const string subscriptionMessage =
-            "<iq from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' id='fake-player' type='set'>" +
+        // valorant requires a recent version to not display "Version Mismatch"
+        string valorantVersion = VALORANTLogMonitor.GetVALORANTVersion() ?? "unknown";
+        string valorantPresence = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{{\"isValid\":true,\"partyId\":\"00000000-0000-0000-0000-000000000000\",\"partyClientVersion\":\"{valorantVersion}\"}}")
+        );
+        Trace.WriteLine("VALORANT version: " + valorantVersion);
+
+        string randomStanzaID = new Guid().ToString();
+
+        string subscriptionMessage =
+            $"<iq from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' id='a-{randomStanzaID}' type='set'>" +
             "<query xmlns='jabber:iq:riotgames:roster'>" +
             "<item jid='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' name='&#9;Deceive Active!' subscription='both' puuid='41c322a1-b328-495b-a004-5ccd3e45eae8'>" +
             "<group priority='9999'>Deceive</group>" +
@@ -357,12 +368,12 @@ internal class MainController : ApplicationContext
             "</query>" +
             "</iq>";
 
-        const string presenceMessage =
-            "<presence from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' id='fake-player-2'>" +
+        string presenceMessage =
+            $"<presence from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' id='b-{randomStanzaID}'>" +
             "<games>" +
             "<keystone><st>chat</st><s.p>keystone</s.p></keystone>" +
             "<league_of_legends><st>chat</st><s.p>league_of_legends</s.p><p>{&quot;pty&quot;:true}</p></league_of_legends>" + // No Region s.r keeps it in the main "League" category rather than "Other Servers" in every region with "Group Games & Servers" active 
-            "<valorant><st>chat</st><s.p>valorant</s.p><p>ewoJImlzVmFsaWQiOiB0cnVlLAoJInBhcnR5SWQiOiAiMDAwMDAwMDAtMDAwMC0wMDAwLTAwMDAtMDAwMDAwMDAwMDAwIiwKCSJwYXJ0eUNsaWVudFZlcnNpb24iOiAicmVsZWFzZS0wMS4wNS1zaGlwcGluZy0xMC00NjAxMjkiCn0=</p></valorant>" +
+            $"<valorant><st>chat</st><s.p>valorant</s.p><p>{valorantPresence}</p></valorant>" +
             "<bacon><st>chat</st><s.l>bacon_availability_online</s.l><s.p>bacon</s.p><s.t>1596633825489</s.t></bacon>" + // Timestamp needed or it will show offline
             "</games>" +
             "<show>chat</show>" +
@@ -438,5 +449,19 @@ internal class MainController : ApplicationContext
     {
         Connected = false;
         ConnectionErrored?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task UpdateValorantPresenceAfterDelay()
+    {
+        // 15 seconds should be plenty to get VALORANT up and running
+        // I am 100% sure this will come to bite me in the future. Hi,
+        // future me.
+        await Task.Delay(15000);
+
+        // only resend
+        if (CreatedFakePlayer)
+        {
+            CreateFakePlayer();
+        }
     }
 }
