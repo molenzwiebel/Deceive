@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace Deceive;
@@ -11,41 +8,32 @@ internal static class Persistence
 {
     internal static readonly string DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Deceive");
 
-    internal static readonly string UpdateVersionPath = Path.Combine(DataDir, "updateVersionPrompted");
-    internal static readonly string DefaultLaunchGamePath = Path.Combine(DataDir, "launchGame");
+    private static readonly string UpdateVersionPath = Path.Combine(DataDir, "updateVersionPrompted");
+    private static readonly string DefaultLaunchGamePath = Path.Combine(DataDir, "launchGame");
 
     static Persistence()
     {
-        if (!Directory.Exists(DataDir)) Directory.CreateDirectory(DataDir);
+        if (!Directory.Exists(DataDir))
+            Directory.CreateDirectory(DataDir);
     }
 
     // Prompted update version.
-    internal static string? GetPromptedUpdateVersion()
-    {
-        return File.Exists(UpdateVersionPath) ? File.ReadAllText(UpdateVersionPath) : null;
-    }
+    internal static Task<string> GetPromptedUpdateVersionAsync() => File.Exists(UpdateVersionPath) ? File.ReadAllTextAsync(UpdateVersionPath) : Task.FromResult(string.Empty);
 
-    internal static void SetPromptedUpdateVersion(string version)
-    {
-        File.WriteAllText(UpdateVersionPath, version);
-    }
+    internal static Task SetPromptedUpdateVersionAsync(string version) => File.WriteAllTextAsync(UpdateVersionPath, version);
 
     // Configured launch option.
-    internal static LaunchGame GetDefaultLaunchGame()
+    internal static async Task<LaunchGame> GetDefaultLaunchGameAsync()
     {
-        if (!File.Exists(DefaultLaunchGamePath)) return LaunchGame.Prompt;
+        if (!File.Exists(DefaultLaunchGamePath))
+            return LaunchGame.Prompt;
 
-        var contents = File.ReadAllText(DefaultLaunchGamePath);
+        var contents = await File.ReadAllTextAsync(DefaultLaunchGamePath);
         if (!Enum.TryParse(contents, true, out LaunchGame launchGame))
-        {
             launchGame = LaunchGame.Prompt;
-        }
 
         return launchGame;
     }
 
-    internal static void SetDefaultLaunchGame(LaunchGame game)
-    {
-        File.WriteAllText(DefaultLaunchGamePath, game.ToString());
-    }
+    internal static Task SetDefaultLaunchGameAsync(LaunchGame game) => File.WriteAllTextAsync(DefaultLaunchGamePath, game.ToString());
 }

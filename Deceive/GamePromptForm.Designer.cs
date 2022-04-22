@@ -1,6 +1,6 @@
 ﻿namespace Deceive
 {
-    partial class GamePromptForm
+    internal partial class GamePromptForm
     {
         /// <summary>
         /// Required designer variable.
