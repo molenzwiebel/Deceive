@@ -1,55 +1,29 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Deceive;
 
-public partial class GamePromptForm : Form
+internal partial class GamePromptForm : Form
 {
-    public static LaunchGame SelectedGame = LaunchGame.Auto;
+    internal static LaunchGame SelectedGame = LaunchGame.Auto;
 
-    public GamePromptForm()
-    {
-        InitializeComponent();
-    }
+    internal GamePromptForm() => InitializeComponent();
 
-    private void OnFormLoad(object sender, EventArgs e)
-    {
-        Text = StartupHandler.DeceiveTitle;
-    }
+    private void OnFormLoad(object sender, EventArgs e) => Text = StartupHandler.DeceiveTitle;
 
-    private void OnLoLLaunch(object sender, EventArgs e)
-    {
-        HandleLaunchChoice(LaunchGame.LoL);
-    }
+    private async void OnLoLLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.LoL);
 
-    private void OnLoRLaunch(object sender, EventArgs e)
-    {
-        HandleLaunchChoice(LaunchGame.LoR);
-    }
+    private async void OnLoRLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.LoR);
 
-    private void OnValorantLaunch(object sender, EventArgs e)
-    {
-        HandleLaunchChoice(LaunchGame.VALORANT);
-    }
+    private async void OnValorantLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.VALORANT);
 
-    private void OnRiotClientLaunch(object sender, EventArgs e)
-    {
-        HandleLaunchChoice(LaunchGame.RiotClient);
-    }
+    private async void OnRiotClientLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.RiotClient);
 
-    private void HandleLaunchChoice(LaunchGame game)
+    private async Task HandleLaunchChoiceAsync(LaunchGame game)
     {
         if (checkboxRemember.Checked)
-        {
-            Persistence.SetDefaultLaunchGame(game);
-        }
+            await Persistence.SetDefaultLaunchGameAsync(game);
 
         SelectedGame = game;
         DialogResult = DialogResult.OK;

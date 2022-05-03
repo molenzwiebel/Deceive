@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
-using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Deceive.Properties;
 
@@ -22,14 +21,14 @@ internal static class StartupHandler
     /// <param name="riotClientParams">Any extra parameters to be passed to the Riot Client.</param>
     /// <param name="gameParams">Any extra parameters to be passed to the launched game.</param>
     [STAThread]
-    public static void Main(LaunchGame args = LaunchGame.Auto, string gamePatchline = "live", string? riotClientParams = null, string? gameParams = null)
+    public static async Task Main(LaunchGame args = LaunchGame.Auto, string gamePatchline = "live", string? riotClientParams = null, string? gameParams = null)
     {
         AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
         Application.EnableVisualStyles();
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         try
         {
-            StartDeceive(args, gamePatchline, riotClientParams, gameParams);
+            await StartDeceiveAsync(args, gamePatchline, riotClientParams, gameParams);
         }
         catch (Exception ex)
         {
@@ -37,7 +36,7 @@ internal static class StartupHandler
             // Show some kind of message so that Deceive doesn't just disappear.
             MessageBox.Show(
                 "Deceive encountered an error and couldn't properly initialize itself. " +
-                "Please contact the creator through GitHub (https://github.com/molenzwiebel/deceive) or Discord.\n\n" + ex,
+                "Please contact the creator through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.\n\n" + ex,
                 DeceiveTitle,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error,
@@ -46,10 +45,8 @@ internal static class StartupHandler
         }
     }
 
-    /**
-         * Actual main function. Wrapped into a separate function so we can catch exceptions.
-         */
-    private static void StartDeceive(LaunchGame game, string gamePatchline, string? riotClientParams, string? gameParams)
+    /// Actual main function. Wrapped into a separate function so we can catch exceptions.
+    private static async Task StartDeceiveAsync(LaunchGame game, string gamePatchline, string? riotClientParams, string? gameParams)
     {
         // Refuse to do anything if the client is already running, unless we're specifically
         // allowing that through League/RC's --allow-multiple-clients.
@@ -64,14 +61,15 @@ internal static class StartupHandler
                 MessageBoxDefaultButton.Button1
             );
 
-            if (result != DialogResult.Yes) return;
-            Utils.KillProcesses();
-            Thread.Sleep(2000); // Riot Client takes a while to die
+            if (result is not DialogResult.Yes)
+                return;
+            await Utils.KillProcesses();
+            await Task.Delay(2000); // Riot Client takes a while to die
         }
 
         try
         {
-            File.WriteAllText(Path.Combine(Persistence.DataDir, "debug.log"), string.Empty);
+            await File.WriteAllTextAsync(Path.Combine(Persistence.DataDir, "debug.log"), string.Empty);
             Trace.Listeners.Add(new TextWriterTraceListener(Path.Combine(Persistence.DataDir, "debug.log")));
             Debug.AutoFlush = true;
             Trace.WriteLine(DeceiveTitle);
@@ -82,23 +80,23 @@ internal static class StartupHandler
         }
 
         // Step 0: Check for updates in the background.
-        Utils.CheckForUpdates();
+        _ = Utils.CheckForUpdatesAsync();
 
         // Step 1: Open a port for our chat proxy, so we can patch chat port into clientconfig.
         var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
-        var port = ((IPEndPoint) listener.LocalEndpoint).Port;
-        Trace.WriteLine($"Client configuration proxy listening on port {port}");
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        Trace.WriteLine($"Chat proxy listening on port {port}");
 
         // Step 2: Find the Riot Client.
-        var riotClientPath = Utils.GetRiotClientPath();
+        var riotClientPath = await Utils.GetRiotClientPath();
 
         // If the riot client doesn't exist, the user is either severely outdated or has a bugged install.
-        if (riotClientPath == null)
+        if (riotClientPath is null)
         {
             MessageBox.Show(
                 "Deceive was unable to find the path to the Riot Client. Usually this can be resolved by launching any Riot Games game once, then launching Deceive again." +
-                "If this does not resolve the issue, please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
+                "If this does not resolve the issue, please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
                 DeceiveTitle,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error,
@@ -109,23 +107,19 @@ internal static class StartupHandler
         }
 
         // If launching "auto", use the persisted launch game (which defaults to prompt).
-        if (game == LaunchGame.Auto)
-        {
-            game = Persistence.GetDefaultLaunchGame();
-        }
+        if (game is LaunchGame.Auto)
+            game = await Persistence.GetDefaultLaunchGameAsync();
 
         // If prompt, display dialog.
-        if (game == LaunchGame.Prompt)
+        if (game is LaunchGame.Prompt)
         {
             new GamePromptForm().ShowDialog();
             game = GamePromptForm.SelectedGame;
         }
 
         // If we don't have a concrete game by now, the user has cancelled and nothing we can do.
-        if (game == LaunchGame.Prompt || game == LaunchGame.Auto)
-        {
+        if (game is LaunchGame.Prompt or LaunchGame.Auto)
             return;
-        }
 
         var launchProduct = game switch
         {
@@ -137,40 +131,30 @@ internal static class StartupHandler
         };
 
         // Step 3: Start proxy web server for clientconfig
-        var proxyServer = new ConfigProxy("https://clientconfig.rpg.riotgames.com", port);
+        var proxyServer = new ConfigProxy(port);
 
         // Step 4: Launch Riot Client (+game)
-        var startArgs = new ProcessStartInfo
-        {
-            FileName = riotClientPath,
-            Arguments = $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\""
-        };
+        var startArgs = new ProcessStartInfo { FileName = riotClientPath, Arguments = $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\"" };
 
-        if (launchProduct != null)
-        {
+        if (launchProduct is not null)
             startArgs.Arguments += $" --launch-product={launchProduct} --launch-patchline={gamePatchline}";
-        }
 
-        if (riotClientParams != null)
-        {
+        if (riotClientParams is not null)
             startArgs.Arguments += $" {riotClientParams}";
-        }
 
-        if (gameParams != null)
-        {
+        if (gameParams is not null)
             startArgs.Arguments += $" -- {gameParams}";
-        }
 
         Trace.WriteLine($"About to launch Riot Client with parameters:\n{startArgs.Arguments}");
         var riotClient = Process.Start(startArgs);
         // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
-        if (riotClient != null)
+        if (riotClient is not null)
         {
             riotClient.EnableRaisingEvents = true;
-            riotClient.Exited += (_, _) =>
+            riotClient.Exited += async (_, _) =>
             {
                 Trace.WriteLine("Exiting on Riot Client exit.");
-                Thread.Sleep(3000); // in case of restart, let us kill ourselves elsewhere
+                await Task.Delay(3000); // in case of restart, let us kill ourselves elsewhere
                 Environment.Exit(0);
             };
         }
@@ -180,26 +164,26 @@ internal static class StartupHandler
         var chatPort = 0;
         proxyServer.PatchedChatServer += (_, args) =>
         {
-            Trace.WriteLine($"The original chat server details were {chatHost}:{chatPort}");
             chatHost = args.ChatHost;
             chatPort = args.ChatPort;
+            Trace.WriteLine($"The original chat server details were {chatHost}:{chatPort}");
         };
 
         Trace.WriteLine("Waiting for client to connect to chat server...");
-        var incoming = listener.AcceptTcpClient();
+        var incoming = await listener.AcceptTcpClientAsync();
         Trace.WriteLine("Client connected!");
 
         // Step 6: Connect sockets.
         var sslIncoming = new SslStream(incoming.GetStream());
         var cert = new X509Certificate2(Resources.Certificate);
-        sslIncoming.AuthenticateAsServer(cert);
+        await sslIncoming.AuthenticateAsServerAsync(cert);
 
-        if (chatHost == null)
+        if (chatHost is null)
         {
             MessageBox.Show(
                 "Deceive was unable to find Riot's chat server, please try again later. " +
                 "If this issue persists and you can connect to chat normally without Deceive, " +
-                "please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
+                "please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
                 DeceiveTitle,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error,
@@ -210,12 +194,12 @@ internal static class StartupHandler
 
         var outgoing = new TcpClient(chatHost, chatPort);
         var sslOutgoing = new SslStream(outgoing.GetStream());
-        sslOutgoing.AuthenticateAsClient(chatHost);
+        await sslOutgoing.AuthenticateAsClientAsync(chatHost);
 
         // Step 7: All sockets are now connected, start tray icon.
         var mainController = new MainController();
         mainController.StartThreads(sslIncoming, sslOutgoing);
-        mainController.ConnectionErrored += (_, _) =>
+        mainController.ConnectionErrored += async (_, _) =>
         {
             Trace.WriteLine("Trying to reconnect.");
             sslIncoming.Close();
@@ -223,11 +207,10 @@ internal static class StartupHandler
             incoming.Close();
             outgoing.Close();
 
-            incoming = listener.AcceptTcpClient();
+            incoming = await listener.AcceptTcpClientAsync();
             sslIncoming = new SslStream(incoming.GetStream());
-            sslIncoming.AuthenticateAsServer(cert);
+            await sslIncoming.AuthenticateAsServerAsync(cert);
             while (true)
-            {
                 try
                 {
                     outgoing = new TcpClient(chatHost, chatPort);
@@ -239,21 +222,18 @@ internal static class StartupHandler
                     var result = MessageBox.Show(
                         "Unable to reconnect to the chat server. Please check your internet connection." +
                         "If this issue persists and you can connect to chat normally without Deceive, " +
-                        "please file a bug report through GitHub (https://github.com/molenzwiebel/deceive) or Discord.",
+                        "please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
                         DeceiveTitle,
                         MessageBoxButtons.RetryCancel,
                         MessageBoxIcon.Error,
                         MessageBoxDefaultButton.Button1
                     );
                     if (result == DialogResult.Cancel)
-                    {
                         Environment.Exit(0);
-                    }
                 }
-            }
 
             sslOutgoing = new SslStream(outgoing.GetStream());
-            sslOutgoing.AuthenticateAsClient(chatHost);
+            await sslOutgoing.AuthenticateAsClientAsync(chatHost);
             mainController.StartThreads(sslIncoming, sslOutgoing);
         };
         Application.Run(mainController);
@@ -261,45 +241,8 @@ internal static class StartupHandler
 
     private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)
     {
-        //Log all unhandled exceptions
+        // Log all unhandled exceptions
         Trace.WriteLine(e.ExceptionObject as Exception);
         Trace.WriteLine(Environment.StackTrace);
     }
-}
-
-/// <summary>
-/// Which game to automatically launch when Deceive is started.
-/// </summary>
-public enum LaunchGame
-{
-    /// <summary>
-    /// Attempt to start League of Legends.
-    /// </summary>
-    LoL,
-
-    /// <summary>
-    /// Attempt to start Legends of Runeterra.
-    /// </summary>
-    LoR,
-
-    /// <summary>
-    /// Attempt to start VALORANT.
-    /// </summary>
-    VALORANT,
-
-    /// <summary>
-    /// Attempt to launch the Riot Client.
-    /// </summary>
-    RiotClient,
-
-    /// <summary>
-    /// Display a dialog asking which game to launch.
-    /// </summary>
-    Prompt,
-
-    /// <summary>
-    /// Automatically pick which game to launch, using either the configured
-    /// default launch method or prompting, depending on previous runs.
-    /// </summary>
-    Auto
 }

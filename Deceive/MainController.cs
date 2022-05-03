@@ -1,9 +1,10 @@
 using System;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Net.Security;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -15,26 +16,6 @@ namespace Deceive;
 
 internal class MainController : ApplicationContext
 {
-    private NotifyIcon TrayIcon { get; }
-    private bool Enabled { get; set; } = true;
-    private string Status { get; set; } = null!;
-    private string StatusFile { get; } = Path.Combine(Persistence.DataDir, "status");
-    private bool ConnectToMuc { get; set; } = true;
-    private bool CreatedFakePlayer { get; set; }
-    private bool SentIntroductionText { get; set; }
-
-    private SslStream Incoming { get; set; } = null!;
-    private SslStream Outgoing { get; set; } = null!;
-    private bool Connected { get; set; }
-    private string LastPresence { get; set; } = null!; // we resend this if the state changes
-
-    private ToolStripMenuItem EnabledMenuItem { get; set; } = null!;
-    private ToolStripMenuItem ChatStatus { get; set; } = null!;
-    private ToolStripMenuItem OfflineStatus { get; set; } = null!;
-    private ToolStripMenuItem MobileStatus { get; set; } = null!;
-
-    internal event EventHandler? ConnectionErrored;
-
     internal MainController()
     {
         TrayIcon = new NotifyIcon
@@ -48,70 +29,72 @@ internal class MainController : ApplicationContext
 
         LoadStatus();
         UpdateTray();
-
-        UpdateValorantPresenceAfterDelay();
     }
+
+    private NotifyIcon TrayIcon { get; }
+    private bool Enabled { get; set; } = true;
+    private string Status { get; set; } = null!;
+    private string StatusFile { get; } = Path.Combine(Persistence.DataDir, "status");
+    private bool ConnectToMuc { get; set; } = true;
+    private bool InsertedFakePlayer { get; set; }
+    private bool SentFakePlayerPresence { get; set; }
+    private bool SentIntroductionText { get; set; }
+    private string? ValorantVersion { get; set; }
+
+    private SslStream Incoming { get; set; } = null!;
+    private SslStream Outgoing { get; set; } = null!;
+    private bool Connected { get; set; }
+    private string LastPresence { get; set; } = null!; // we resend this if the state changes
+
+    private ToolStripMenuItem EnabledMenuItem { get; set; } = null!;
+    private ToolStripMenuItem ChatStatus { get; set; } = null!;
+    private ToolStripMenuItem OfflineStatus { get; set; } = null!;
+    private ToolStripMenuItem MobileStatus { get; set; } = null!;
+
+    internal event EventHandler? ConnectionErrored;
 
     private void UpdateTray()
     {
-        var aboutMenuItem = new ToolStripMenuItem(StartupHandler.DeceiveTitle)
-        {
-            Enabled = false
-        };
+        var aboutMenuItem = new ToolStripMenuItem(StartupHandler.DeceiveTitle) { Enabled = false };
 
-        EnabledMenuItem = new ToolStripMenuItem("Enabled", null, (_, _) =>
+        EnabledMenuItem = new ToolStripMenuItem("Enabled", null, async (_, _) =>
         {
             Enabled = !Enabled;
-            UpdateStatus(Enabled ? Status : "chat");
-            SendMessageFromFakePlayer(Enabled ? "Deceive is now enabled." : "Deceive is now disabled.");
+            await UpdateStatusAsync(Enabled ? Status : "chat");
+            await SendMessageFromFakePlayerAsync(Enabled ? "Deceive is now enabled." : "Deceive is now disabled.");
             UpdateTray();
-        })
-        {
-            Checked = Enabled
-        };
+        }) { Checked = Enabled };
 
         var mucMenuItem = new ToolStripMenuItem("Enable lobby chat", null, (_, _) =>
         {
             ConnectToMuc = !ConnectToMuc;
             UpdateTray();
-        })
-        {
-            Checked = ConnectToMuc
-        };
+        }) { Checked = ConnectToMuc };
 
-        ChatStatus = new ToolStripMenuItem("Online", null, (_, _) =>
+        ChatStatus = new ToolStripMenuItem("Online", null, async (_, _) =>
         {
-            UpdateStatus(Status = "chat");
+            await UpdateStatusAsync(Status = "chat");
             Enabled = true;
             UpdateTray();
-        })
-        {
-            Checked = Status.Equals("chat")
-        };
+        }) { Checked = Status.Equals("chat") };
 
-        OfflineStatus = new ToolStripMenuItem("Offline", null, (_, _) =>
+        OfflineStatus = new ToolStripMenuItem("Offline", null, async (_, _) =>
         {
-            UpdateStatus(Status = "offline");
+            await UpdateStatusAsync(Status = "offline");
             Enabled = true;
             UpdateTray();
-        })
-        {
-            Checked = Status.Equals("offline")
-        };
+        }) { Checked = Status.Equals("offline") };
 
-        MobileStatus = new ToolStripMenuItem("Mobile", null, (_, _) =>
+        MobileStatus = new ToolStripMenuItem("Mobile", null, async (_, _) =>
         {
-            UpdateStatus(Status = "mobile");
+            await UpdateStatusAsync(Status = "mobile");
             Enabled = true;
             UpdateTray();
-        })
-        {
-            Checked = Status.Equals("mobile")
-        };
+        }) { Checked = Status.Equals("mobile") };
 
         var typeMenuItem = new ToolStripMenuItem("Status Type", null, ChatStatus, OfflineStatus, MobileStatus);
 
-        var restartWithDifferentGameItem = new ToolStripMenuItem("Restart and launch a different game", null, (_, _) =>
+        var restartWithDifferentGameItem = new ToolStripMenuItem("Restart and launch a different game", null, async (_, _) =>
         {
             var result = MessageBox.Show(
                 "Restart Deceive to launch a different game? This will also stop related games if they are running.",
@@ -121,17 +104,18 @@ internal class MainController : ApplicationContext
                 MessageBoxDefaultButton.Button1
             );
 
-            if (result != DialogResult.Yes) return;
+            if (result is not DialogResult.Yes)
+                return;
 
-            Utils.KillProcesses();
+            await Utils.KillProcesses();
             Thread.Sleep(2000);
 
-            Persistence.SetDefaultLaunchGame(LaunchGame.Prompt);
+            await Persistence.SetDefaultLaunchGameAsync(LaunchGame.Prompt);
             Process.Start(Application.ExecutablePath);
             Environment.Exit(0);
         });
 
-        var quitMenuItem = new ToolStripMenuItem("Quit", null, (_, _) =>
+        var quitMenuItem = new ToolStripMenuItem("Quit", null, async (_, _) =>
         {
             var result = MessageBox.Show(
                 "Are you sure you want to stop Deceive? This will also stop related games if they are running.",
@@ -141,10 +125,11 @@ internal class MainController : ApplicationContext
                 MessageBoxDefaultButton.Button1
             );
 
-            if (result != DialogResult.Yes) return;
+            if (result is not DialogResult.Yes)
+                return;
 
-            Utils.KillProcesses();
-            SaveStatus();
+            await Utils.KillProcesses();
+            await SaveStatusAsync();
             Application.Exit();
         });
 
@@ -153,12 +138,15 @@ internal class MainController : ApplicationContext
 #if DEBUG
         var closeIn = new ToolStripMenuItem("Close incoming", null, (_, _) => { Incoming.Close(); });
         var closeOut = new ToolStripMenuItem("Close outgoing", null, (_, _) => { Outgoing.Close(); });
-        var createFakePlayer = new ToolStripMenuItem("Resend fake player", null, (_, _) => { CreateFakePlayer(); });
-        var sendTestMsg = new ToolStripMenuItem("Send message", null, (_, _) => { SendMessageFromFakePlayer("Test"); });
+        var createFakePlayer = new ToolStripMenuItem("Resend fake player", null, async (_, _) => { await SendFakePlayerPresenceAsync(); });
+        var sendTestMsg = new ToolStripMenuItem("Send message", null, async (_, _) => { await SendMessageFromFakePlayerAsync("Test"); });
 
-        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, restartWithDifferentGameItem, quitMenuItem });
+        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[]
+        {
+            aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, restartWithDifferentGameItem, quitMenuItem
+        });
 #else
-        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] {aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem});
+        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem });
 #endif
     }
 
@@ -167,13 +155,14 @@ internal class MainController : ApplicationContext
         Incoming = incoming;
         Outgoing = outgoing;
         Connected = true;
-        CreatedFakePlayer = false;
+        InsertedFakePlayer = false;
+        SentFakePlayerPresence = false;
 
-        new Thread(IncomingLoop).Start();
-        new Thread(OutgoingLoop).Start();
+        Task.Run(IncomingLoopAsync);
+        Task.Run(OutgoingLoopAsync);
     }
 
-    private void IncomingLoop()
+    private async Task IncomingLoopAsync()
     {
         try
         {
@@ -182,49 +171,56 @@ internal class MainController : ApplicationContext
 
             do
             {
-                byteCount = Incoming.Read(bytes, 0, bytes.Length);
+                byteCount = await Incoming.ReadAsync(bytes);
 
                 var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
 
                 // If this is possibly a presence stanza, rewrite it.
                 if (content.Contains("<presence") && Enabled)
                 {
-                    PossiblyRewriteAndResendPresence(content, Status);
                     Trace.WriteLine("<!--RC TO SERVER ORIGINAL-->" + content);
+                    await PossiblyRewriteAndResendPresenceAsync(content, Status);
                 }
                 else if (content.Contains("41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net"))
                 {
-                    if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "offline", CompareOptions.IgnoreCase) >= 0)
+                    if (content.Contains("offline", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (!Enabled) SendMessageFromFakePlayer("Deceive is now enabled.");
+                        if (!Enabled)
+                            await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
                         OfflineStatus.PerformClick();
                     }
-                    else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "mobile", CompareOptions.IgnoreCase) >= 0)
+                    else if (content.Contains("mobile", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (!Enabled) SendMessageFromFakePlayer("Deceive is now enabled.");
+                        if (!Enabled)
+                            await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
                         MobileStatus.PerformClick();
                     }
-                    else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "online", CompareOptions.IgnoreCase) >= 0)
+                    else if (content.Contains("online", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (!Enabled) SendMessageFromFakePlayer("Deceive is now enabled.");
+                        if (!Enabled)
+                            await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
                         ChatStatus.PerformClick();
                     }
-                    else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "enable", CompareOptions.IgnoreCase) >= 0)
+                    else if (content.Contains("enable", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (Enabled) SendMessageFromFakePlayer("Deceive is already enabled.");
-                        else EnabledMenuItem.PerformClick();
+                        if (Enabled)
+                            await SendMessageFromFakePlayerAsync("Deceive is already enabled.");
+                        else
+                            EnabledMenuItem.PerformClick();
                     }
-                    else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "disable", CompareOptions.IgnoreCase) >= 0)
+                    else if (content.Contains("disable", StringComparison.InvariantCultureIgnoreCase))
                     {
-                        if (!Enabled) SendMessageFromFakePlayer("Deceive is already disabled.");
-                        else EnabledMenuItem.PerformClick();
+                        if (!Enabled)
+                            await SendMessageFromFakePlayerAsync("Deceive is already disabled.");
+                        else
+                            EnabledMenuItem.PerformClick();
                     }
-                    else if (CultureInfo.InvariantCulture.CompareInfo.IndexOf(content, "status", CompareOptions.IgnoreCase) >= 0)
+                    else if (content.Contains("status", StringComparison.InvariantCultureIgnoreCase))
                     {
                         if (Status == "chat")
-                            SendMessageFromFakePlayer("You are appearing online.");
+                            await SendMessageFromFakePlayerAsync("You are appearing online.");
                         else
-                            SendMessageFromFakePlayer("You are appearing " + Status + ".");
+                            await SendMessageFromFakePlayerAsync("You are appearing " + Status + ".");
                     }
 
                     //Don't send anything involving our fake user to chat servers
@@ -232,24 +228,32 @@ internal class MainController : ApplicationContext
                 }
                 else
                 {
-                    Outgoing.Write(bytes, 0, byteCount);
+                    await Outgoing.WriteAsync(bytes.AsMemory(0, byteCount));
                     Trace.WriteLine("<!--RC TO SERVER-->" + content);
                 }
+
+                if (InsertedFakePlayer && !SentFakePlayerPresence)
+                    await SendFakePlayerPresenceAsync();
+
+                if (!SentIntroductionText)
+                    await SendIntroductionTextAsync();
             } while (byteCount != 0 && Connected);
         }
         catch (Exception e)
         {
+            Trace.WriteLine("Incoming errored.");
             Trace.WriteLine(e);
         }
         finally
         {
             Trace.WriteLine("Incoming closed.");
-            SaveStatus();
-            if (Connected) OnConnectionErrored();
+            await SaveStatusAsync();
+            if (Connected)
+                OnConnectionErrored();
         }
     }
 
-    private void OutgoingLoop()
+    private async Task OutgoingLoopAsync()
     {
         try
         {
@@ -258,23 +262,45 @@ internal class MainController : ApplicationContext
 
             do
             {
-                byteCount = Outgoing.Read(bytes, 0, bytes.Length);
-                Incoming.Write(bytes, 0, byteCount);
-                Trace.WriteLine("<!--SERVER TO RC-->" + Encoding.UTF8.GetString(bytes, 0, byteCount));
-            } while (byteCount != 0 && Connected);
+                byteCount = await Outgoing.ReadAsync(bytes);
+                var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
 
-            Trace.WriteLine("Outgoing closed.");
+                // Insert fake player into roster
+                const string roster = "<query xmlns='jabber:iq:riotgames:roster'>";
+                if (!InsertedFakePlayer && content.Contains(roster))
+                {
+                    InsertedFakePlayer = true;
+                    Trace.WriteLine("<!--SERVER TO RC ORIGINAL-->" + content);
+                    content = content.Insert(content.IndexOf(roster, StringComparison.Ordinal) + roster.Length,
+                        "<item jid='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' name='&#9;Deceive Active!' subscription='both' puuid='41c322a1-b328-495b-a004-5ccd3e45eae8'>" +
+                        "<group priority='9999'>Deceive</group>" +
+                        "<id name='&#9;Deceive Active!' tagline=''/><lol name='&#9;Deceive Active!'/>" +
+                        "</item>");
+                    await Incoming.WriteAsync(Encoding.UTF8.GetBytes(content));
+                    Trace.WriteLine("<!--DECEIVE TO RC-->" + content);
+                }
+                else
+                {
+                    await Incoming.WriteAsync(bytes.AsMemory(0, byteCount));
+                    Trace.WriteLine("<!--SERVER TO RC-->" + content);
+                }
+            } while (byteCount != 0 && Connected);
         }
         catch (Exception e)
         {
-            Trace.WriteLine(e);
             Trace.WriteLine("Outgoing errored.");
-            SaveStatus();
-            if (Connected) OnConnectionErrored();
+            Trace.WriteLine(e);
+        }
+        finally
+        {
+            Trace.WriteLine("Outgoing closed.");
+            await SaveStatusAsync();
+            if (Connected)
+                OnConnectionErrored();
         }
     }
 
-    private void PossiblyRewriteAndResendPresence(string content, string targetStatus)
+    private async Task PossiblyRewriteAndResendPresenceAsync(string content, string targetStatus)
     {
         try
         {
@@ -282,21 +308,20 @@ internal class MainController : ApplicationContext
             var wrappedContent = "<xml>" + content + "</xml>";
             var xml = XDocument.Load(new StringReader(wrappedContent));
 
-            if (xml.Root == null) return;
-            if (xml.Root.HasElements == false) return;
+            if (xml.Root is null)
+                return;
+            if (xml.Root.HasElements is false)
+                return;
 
             foreach (var presence in xml.Root.Elements())
             {
-                if (presence.Name != "presence") continue;
-                if (presence.Attribute("to") != null)
+                if (presence.Name != "presence")
+                    continue;
+                if (presence.Attribute("to") is not null)
                 {
-                    if (ConnectToMuc) continue;
+                    if (ConnectToMuc)
+                        continue;
                     presence.Remove();
-                }
-
-                if (!CreatedFakePlayer)
-                {
-                    CreateFakePlayer();
                 }
 
                 if (targetStatus != "chat" || presence.Element("games")?.Element("league_of_legends")?.Element("st")?.Value != "dnd")
@@ -305,7 +330,8 @@ internal class MainController : ApplicationContext
                     presence.Element("games")?.Element("league_of_legends")?.Element("st")?.ReplaceNodes(targetStatus);
                 }
 
-                if (targetStatus == "chat") continue;
+                if (targetStatus == "chat")
+                    continue;
                 presence.Element("status")?.Remove();
 
                 if (targetStatus == "mobile")
@@ -318,24 +344,43 @@ internal class MainController : ApplicationContext
                     presence.Element("games")?.Element("league_of_legends")?.Remove();
                 }
 
-                //Remove Legends of Runeterra presence
+                // Remove Legends of Runeterra presence
                 presence.Element("games")?.Element("bacon")?.Remove();
 
-                //Remove VALORANT presence
+                // Extracts current VALORANT version from the logs, so that we can show a fake
+                // player with the proper version and avoid "Version Mismatch" from being shown.
+                //
+                // This isn't technically necessary, but people keep coming in and asking whether
+                // the scary red text means Deceive doesn't work, so might as well do this and
+                // get a slightly better user experience.
+                if (ValorantVersion is null)
+                {
+                    var valorantBase64 = presence.Element("games")?.Element("valorant")?.Element("p")?.Value;
+                    if (valorantBase64 is not null)
+                    {
+                        var valorantPresence = Encoding.UTF8.GetString(Convert.FromBase64String(valorantBase64));
+                        var valorantJson = JsonSerializer.Deserialize<JsonNode>(valorantPresence);
+                        ValorantVersion = valorantJson?["partyClientVersion"]?.GetValue<string>();
+                        Trace.WriteLine("Found VALORANT version: " + ValorantVersion);
+                        // only resend
+                        if (InsertedFakePlayer && ValorantVersion is not null)
+                            await SendFakePlayerPresenceAsync();
+                    }
+                }
+
+                // Remove VALORANT presence
                 presence.Element("games")?.Element("valorant")?.Remove();
             }
 
             var sb = new StringBuilder();
-            var xws = new XmlWriterSettings { OmitXmlDeclaration = true, Encoding = Encoding.UTF8, ConformanceLevel = ConformanceLevel.Fragment };
-            using (var xw = XmlWriter.Create(sb, xws))
+            var xws = new XmlWriterSettings { OmitXmlDeclaration = true, Encoding = Encoding.UTF8, ConformanceLevel = ConformanceLevel.Fragment, Async = true };
+            await using (var xw = XmlWriter.Create(sb, xws))
             {
                 foreach (var xElement in xml.Root.Elements())
-                {
                     xElement.WriteTo(xw);
-                }
             }
 
-            Outgoing.Write(Encoding.UTF8.GetBytes(sb.ToString()));
+            await Outgoing.WriteAsync(Encoding.UTF8.GetBytes(sb.ToString()));
             Trace.WriteLine("<!--DECEIVE TO SERVER-->" + sb);
         }
         catch (Exception e)
@@ -345,68 +390,50 @@ internal class MainController : ApplicationContext
         }
     }
 
-    private async void CreateFakePlayer()
+    private async Task SendFakePlayerPresenceAsync()
     {
-        CreatedFakePlayer = true;
-
-        // valorant requires a recent version to not display "Version Mismatch"
-        string valorantVersion = VALORANTLogMonitor.GetVALORANTVersion() ?? "unknown";
-        string valorantPresence = Convert.ToBase64String(
-            Encoding.UTF8.GetBytes($"{{\"isValid\":true,\"partyId\":\"00000000-0000-0000-0000-000000000000\",\"partyClientVersion\":\"{valorantVersion}\"}}")
+        SentFakePlayerPresence = true;
+        // VALORANT requires a recent version to not display "Version Mismatch"
+        var valorantPresence = Convert.ToBase64String(
+            Encoding.UTF8.GetBytes($"{{\"isValid\":true,\"partyId\":\"00000000-0000-0000-0000-000000000000\",\"partyClientVersion\":\"{ValorantVersion ?? "unknown"}\"}}")
         );
-        Trace.WriteLine("VALORANT version: " + valorantVersion);
 
-        string randomStanzaID = new Guid().ToString();
+        var randomStanzaId = Guid.NewGuid();
+        var unixTimeMilliseconds = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
-        string subscriptionMessage =
-            $"<iq from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' id='a-{randomStanzaID}' type='set'>" +
-            "<query xmlns='jabber:iq:riotgames:roster'>" +
-            "<item jid='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' name='&#9;Deceive Active!' subscription='both' puuid='41c322a1-b328-495b-a004-5ccd3e45eae8'>" +
-            "<group priority='9999'>Deceive</group>" +
-            "<id name='&#9;Deceive Active!' tagline=''/> <lol name='&#9;Deceive Active!'/>" +
-            "</item>" +
-            "</query>" +
-            "</iq>";
-
-        string presenceMessage =
-            $"<presence from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' id='b-{randomStanzaID}'>" +
+        var presenceMessage =
+            $"<presence from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' id='b-{randomStanzaId}'>" +
             "<games>" +
-            "<keystone><st>chat</st><s.p>keystone</s.p></keystone>" +
-            "<league_of_legends><st>chat</st><s.p>league_of_legends</s.p><p>{&quot;pty&quot;:true}</p></league_of_legends>" + // No Region s.r keeps it in the main "League" category rather than "Other Servers" in every region with "Group Games & Servers" active 
-            $"<valorant><st>chat</st><s.p>valorant</s.p><p>{valorantPresence}</p></valorant>" +
-            "<bacon><st>chat</st><s.l>bacon_availability_online</s.l><s.p>bacon</s.p><s.t>1596633825489</s.t></bacon>" + // Timestamp needed or it will show offline
+            $"<keystone><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>keystone</s.p></keystone>" +
+            $"<league_of_legends><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>league_of_legends</s.p><p>{{&quot;pty&quot;:true}}</p></league_of_legends>" + // No Region s.r keeps it in the main "League" category rather than "Other Servers" in every region with "Group Games & Servers" active
+            $"<valorant><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>valorant</s.p><p>{valorantPresence}</p></valorant>" +
+            $"<bacon><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.l>bacon_availability_online</s.l><s.p>bacon</s.p></bacon>" +
             "</games>" +
             "<show>chat</show>" +
             "</presence>";
 
-        var bytes = Encoding.UTF8.GetBytes(subscriptionMessage);
-        Incoming.Write(bytes, 0, bytes.Length);
-        Trace.WriteLine("<!--DECEIVE TO RC-->" + subscriptionMessage);
-
-        await Task.Delay(200);
-
-        bytes = Encoding.UTF8.GetBytes(presenceMessage);
-        Incoming.Write(bytes, 0, bytes.Length);
+        var bytes = Encoding.UTF8.GetBytes(presenceMessage);
+        await Incoming.WriteAsync(bytes);
         Trace.WriteLine("<!--DECEIVE TO RC-->" + presenceMessage);
-
-
-        await Task.Delay(10000);
-
-        if (SentIntroductionText) return;
-        SentIntroductionText = true;
-
-        SendMessageFromFakePlayer("Welcome! Deceive is running and you are currently appearing " + Status +
-                                  ". Despite what the game client may indicate, you are appearing offline to your friends unless you manually disable Deceive.");
-        await Task.Delay(200);
-        SendMessageFromFakePlayer(
-            "If you want to invite others while being offline, you may need to disable Deceive for them to accept. You can enable Deceive again as soon as they are in your lobby.");
-        await Task.Delay(200);
-        SendMessageFromFakePlayer("To enable or disable Deceive, or to configure other settings, find Deceive in your tray icons.");
-        await Task.Delay(200);
-        SendMessageFromFakePlayer("Have fun!");
     }
 
-    private void SendMessageFromFakePlayer(string message)
+    private async Task SendIntroductionTextAsync()
+    {
+        if (!InsertedFakePlayer)
+            return;
+        SentIntroductionText = true;
+        await SendMessageFromFakePlayerAsync("Welcome! Deceive is running and you are currently appearing " + Status +
+                                             ". Despite what the game client may indicate, you are appearing offline to your friends unless you manually disable Deceive.");
+        await Task.Delay(200);
+        await SendMessageFromFakePlayerAsync(
+            "If you want to invite others while being offline, you may need to disable Deceive for them to accept. You can enable Deceive again as soon as they are in your lobby.");
+        await Task.Delay(200);
+        await SendMessageFromFakePlayerAsync("To enable or disable Deceive, or to configure other settings, find Deceive in your tray icons.");
+        await Task.Delay(200);
+        await SendMessageFromFakePlayerAsync("Have fun!");
+    }
+
+    private async Task SendMessageFromFakePlayerAsync(string message)
     {
         var stamp = DateTime.UtcNow.AddSeconds(1).ToString("yyyy-MM-dd HH:mm:ss.fff");
 
@@ -414,54 +441,36 @@ internal class MainController : ApplicationContext
             $"<message from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' stamp='{stamp}' id='fake-{stamp}' type='chat'><body>{message}</body></message>";
 
         var bytes = Encoding.UTF8.GetBytes(chatMessage);
-        Incoming.Write(bytes, 0, bytes.Length);
+        await Incoming.WriteAsync(bytes);
         Trace.WriteLine("<!--DECEIVE TO RC-->" + chatMessage);
     }
 
-    private void UpdateStatus(string newStatus)
+    private async Task UpdateStatusAsync(string newStatus)
     {
-        if (string.IsNullOrEmpty(LastPresence)) return;
+        if (string.IsNullOrEmpty(LastPresence))
+            return;
 
-        PossiblyRewriteAndResendPresence(LastPresence, newStatus);
+        await PossiblyRewriteAndResendPresenceAsync(LastPresence, newStatus);
 
         if (newStatus == "chat")
-        {
-            SendMessageFromFakePlayer("You are now appearing online.");
-        }
+            await SendMessageFromFakePlayerAsync("You are now appearing online.");
         else
-        {
-            SendMessageFromFakePlayer("You are now appearing " + newStatus + ".");
-        }
+            await SendMessageFromFakePlayerAsync("You are now appearing " + newStatus + ".");
     }
 
     private void LoadStatus()
     {
-        if (File.Exists(StatusFile)) Status = File.ReadAllText(StatusFile) == "mobile" ? "mobile" : "offline";
-        else Status = "offline";
+        if (File.Exists(StatusFile))
+            Status = File.ReadAllText(StatusFile) == "mobile" ? "mobile" : "offline";
+        else
+            Status = "offline";
     }
 
-    private void SaveStatus()
-    {
-        File.WriteAllText(StatusFile, Status);
-    }
+    private Task SaveStatusAsync() => File.WriteAllTextAsync(StatusFile, Status);
 
     private void OnConnectionErrored()
     {
         Connected = false;
         ConnectionErrored?.Invoke(this, EventArgs.Empty);
-    }
-
-    private async Task UpdateValorantPresenceAfterDelay()
-    {
-        // 15 seconds should be plenty to get VALORANT up and running
-        // I am 100% sure this will come to bite me in the future. Hi,
-        // future me.
-        await Task.Delay(15000);
-
-        // only resend
-        if (CreatedFakePlayer)
-        {
-            CreateFakePlayer();
-        }
     }
 }

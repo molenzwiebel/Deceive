@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Deceive;
@@ -19,44 +20,47 @@ internal static class Utils
         get
         {
             var version = Assembly.GetEntryAssembly()?.GetName().Version;
-            if (version == null) return "v0.0.0";
+            if (version is null)
+                return "v0.0.0";
             return "v" + version.Major + "." + version.Minor + "." + version.Build;
         }
     }
 
     /**
-         * Asynchronously checks if the current version of Deceive is the latest version.
-         * If not, and the user has not dismissed the message before, an alert is shown.
-         */
-    public static async void CheckForUpdates()
+     * Asynchronously checks if the current version of Deceive is the latest version.
+     * If not, and the user has not dismissed the message before, an alert is shown.
+     */
+    public static async Task CheckForUpdatesAsync()
     {
         try
         {
             var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.UserAgent.Add(
-                new ProductInfoHeaderValue("Deceive", DeceiveVersion));
+            httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Deceive", DeceiveVersion));
 
             var response =
-                await httpClient.GetAsync("https://api.github.com/repos/molenzwiebel/deceive/releases/latest");
+                await httpClient.GetAsync("https://api.github.com/repos/molenzwiebel/Deceive/releases/latest");
             var content = await response.Content.ReadAsStringAsync();
             var release = JsonSerializer.Deserialize<JsonNode>(content);
             var latestVersion = release?["tag_name"]?.ToString();
 
             // If failed to fetch or already latest or newer, return.
-            if (latestVersion == null) return;
+            if (latestVersion is null)
+                return;
             var githubVersion = new Version(latestVersion.Replace("v", ""));
             var assemblyVersion = new Version(DeceiveVersion.Replace("v", ""));
             // Earlier = -1, Same = 0, Later = 1
-            if (assemblyVersion.CompareTo(githubVersion) != -1) return;
+            if (assemblyVersion.CompareTo(githubVersion) != -1)
+                return;
 
             // Check if we have shown this before.
-            var latestShownVersion = Persistence.GetPromptedUpdateVersion();
+            var latestShownVersion = await Persistence.GetPromptedUpdateVersionAsync();
 
             // If we have, return.
-            if (latestShownVersion != null && latestShownVersion == latestVersion) return;
+            if (string.IsNullOrEmpty(latestShownVersion) && latestShownVersion == latestVersion)
+                return;
 
             // Show a message and record the latest shown.
-            Persistence.SetPromptedUpdateVersion(latestVersion);
+            await Persistence.SetPromptedUpdateVersionAsync(latestVersion);
 
             var result = MessageBox.Show(
                 $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
@@ -68,11 +72,9 @@ internal static class Utils
                 MessageBoxDefaultButton.Button1
             );
 
-            if (result == DialogResult.OK)
-            {
+            if (result is DialogResult.OK)
                 // Open the url in the browser.
                 Process.Start(release?["html_url"]?.ToString()!);
-            }
         }
         catch
         {
@@ -87,40 +89,37 @@ internal static class Utils
         riotCandidates.AddRange(Process.GetProcessesByName("LoR"));
         riotCandidates.AddRange(Process.GetProcessesByName("VALORANT-Win64-Shipping"));
         riotCandidates.AddRange(Process.GetProcessesByName("RiotClientServices"));
-        return riotCandidates; 
+        return riotCandidates;
     }
 
     // Checks if there is a running LCU/LoR/VALORANT/RC or Deceive instance.
     public static bool IsClientRunning() => GetProcesses().Any();
 
     // Kills the running LCU/LoR/VALORANT/RC or Deceive instance, if applicable.
-    public static void KillProcesses()
+    public static async Task KillProcesses()
     {
         foreach (var process in GetProcesses())
         {
             process.Refresh();
-            if (process.HasExited) continue;
+            if (process.HasExited)
+                continue;
             process.Kill();
-            process.WaitForExit();
+            await process.WaitForExitAsync();
         }
     }
 
     // Checks for any installed Riot Client configuration,
     // and returns the path of the client if it does. Else, returns null.
-    public static string? GetRiotClientPath()
+    public static async Task<string?> GetRiotClientPath()
     {
         // Find the RiotClientInstalls file.
         var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
             "Riot Games/RiotClientInstalls.json");
-        if (!File.Exists(installPath)) return null;
+        if (!File.Exists(installPath))
+            return null;
 
-        var data = JsonSerializer.Deserialize<JsonNode>(File.ReadAllText(installPath));
-        var rcPaths = new List<string?>
-        {
-            data?["rc_default"]?.ToString(),
-            data?["rc_live"]?.ToString(),
-            data?["rc_beta"]?.ToString()
-        };
+        var data = JsonSerializer.Deserialize<JsonNode>(await File.ReadAllTextAsync(installPath));
+        var rcPaths = new List<string?> { data?["rc_default"]?.ToString(), data?["rc_live"]?.ToString(), data?["rc_beta"]?.ToString() };
 
         return rcPaths.FirstOrDefault(File.Exists);
     }
