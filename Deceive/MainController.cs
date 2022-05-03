@@ -222,6 +222,10 @@ internal class MainController : ApplicationContext
                         else
                             await SendMessageFromFakePlayerAsync("You are appearing " + Status + ".");
                     }
+                    else if (content.Contains("help", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        await SendMessageFromFakePlayerAsync("You can send the following messages to quickly change Deceive settings: online/offline/mobile/enable/disable/status");
+                    }
 
                     //Don't send anything involving our fake user to chat servers
                     Trace.WriteLine("<!--RC TO SERVER REMOVED-->" + content);

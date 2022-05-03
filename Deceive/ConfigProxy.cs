@@ -17,6 +17,7 @@ namespace Deceive;
 internal class ConfigProxy
 {
     private const string ConfigUrl = "https://clientconfig.rpg.riotgames.com";
+    private const string GeoPasUrl = "https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat";
 
     /**
      * Starts a new client configuration proxy at a random port. The proxy will modify any responses
@@ -97,6 +98,9 @@ internal class ConfigProxy
         var modifiedContent = content;
         Trace.WriteLine("ORIGINAL CLIENTCONFIG: " + content);
 
+        // sometimes riot yields an internal error with content that is definitely
+        // not json. we can just forward it to the riot client, which will retry
+        // the request until it succeeds
         if (!result.IsSuccessStatusCode)
             goto RESPOND;
 
@@ -128,8 +132,9 @@ internal class ConfigProxy
                 var affinities = configObject["chat.affinities"];
                 if (configObject["chat.affinity.enabled"]?.GetValue<bool>() ?? false)
                 {
-                    var pasRequest = new HttpRequestMessage(HttpMethod.Get, "https://riot-geo.pas.si.riotgames.com/pas/v1/service/chat");
+                    var pasRequest = new HttpRequestMessage(HttpMethod.Get, GeoPasUrl);
                     pasRequest.Headers.TryAddWithoutValidation("Authorization", ctx.Request.Headers["authorization"]);
+
                     try
                     {
                         var pasJwt = await (await Client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
@@ -139,6 +144,7 @@ internal class ConfigProxy
                         var pasJwtString = Encoding.UTF8.GetString(Convert.FromBase64String(validBase64));
                         var pasJwtJson = JsonSerializer.Deserialize<JsonNode>(pasJwtString);
                         var affinity = pasJwtJson?["affinity"]?.GetValue<string>();
+
                         // replace fallback host with host by player affinity
                         if (affinity is not null)
                         {
@@ -186,7 +192,7 @@ internal class ConfigProxy
 
         // Using the builtin EmbedIO methods for sending the response adds some garbage in the front of it.
         // This seems to do the trick.
-        RESPOND:
+RESPOND:
         var responseBytes = Encoding.UTF8.GetBytes(modifiedContent);
 
         ctx.Response.StatusCode = (int)result.StatusCode;
