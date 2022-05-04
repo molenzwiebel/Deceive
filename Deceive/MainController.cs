@@ -94,7 +94,7 @@ internal class MainController : ApplicationContext
 
         var typeMenuItem = new ToolStripMenuItem("Status Type", null, ChatStatus, OfflineStatus, MobileStatus);
 
-        var restartWithDifferentGameItem = new ToolStripMenuItem("Restart and launch a different game", null, async (_, _) =>
+        var restartWithDifferentGameItem = new ToolStripMenuItem("Restart and launch a different game", null, (_, _) =>
         {
             var result = MessageBox.Show(
                 "Restart Deceive to launch a different game? This will also stop related games if they are running.",
@@ -107,15 +107,15 @@ internal class MainController : ApplicationContext
             if (result is not DialogResult.Yes)
                 return;
 
-            await Utils.KillProcesses();
+            Utils.KillProcesses();
             Thread.Sleep(2000);
 
-            await Persistence.SetDefaultLaunchGameAsync(LaunchGame.Prompt);
+            Persistence.SetDefaultLaunchGame(LaunchGame.Prompt);
             Process.Start(Application.ExecutablePath);
             Environment.Exit(0);
         });
 
-        var quitMenuItem = new ToolStripMenuItem("Quit", null, async (_, _) =>
+        var quitMenuItem = new ToolStripMenuItem("Quit", null, (_, _) =>
         {
             var result = MessageBox.Show(
                 "Are you sure you want to stop Deceive? This will also stop related games if they are running.",
@@ -128,8 +128,8 @@ internal class MainController : ApplicationContext
             if (result is not DialogResult.Yes)
                 return;
 
-            await Utils.KillProcesses();
-            await SaveStatusAsync();
+            Utils.KillProcesses();
+            SaveStatus();
             Application.Exit();
         });
 
@@ -171,7 +171,7 @@ internal class MainController : ApplicationContext
 
             do
             {
-                byteCount = await Incoming.ReadAsync(bytes);
+                byteCount = await Incoming.ReadAsync(bytes, 0, bytes.Length);
 
                 var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
 
@@ -183,46 +183,46 @@ internal class MainController : ApplicationContext
                 }
                 else if (content.Contains("41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net"))
                 {
-                    if (content.Contains("offline", StringComparison.InvariantCultureIgnoreCase))
+                    if (content.ToLower().Contains("offline"))
                     {
                         if (!Enabled)
                             await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
                         OfflineStatus.PerformClick();
                     }
-                    else if (content.Contains("mobile", StringComparison.InvariantCultureIgnoreCase))
+                    else if (content.ToLower().Contains("mobile"))
                     {
                         if (!Enabled)
                             await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
                         MobileStatus.PerformClick();
                     }
-                    else if (content.Contains("online", StringComparison.InvariantCultureIgnoreCase))
+                    else if (content.ToLower().Contains("online"))
                     {
                         if (!Enabled)
                             await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
                         ChatStatus.PerformClick();
                     }
-                    else if (content.Contains("enable", StringComparison.InvariantCultureIgnoreCase))
+                    else if (content.ToLower().Contains("enable"))
                     {
                         if (Enabled)
                             await SendMessageFromFakePlayerAsync("Deceive is already enabled.");
                         else
                             EnabledMenuItem.PerformClick();
                     }
-                    else if (content.Contains("disable", StringComparison.InvariantCultureIgnoreCase))
+                    else if (content.ToLower().Contains("disable"))
                     {
                         if (!Enabled)
                             await SendMessageFromFakePlayerAsync("Deceive is already disabled.");
                         else
                             EnabledMenuItem.PerformClick();
                     }
-                    else if (content.Contains("status", StringComparison.InvariantCultureIgnoreCase))
+                    else if (content.ToLower().Contains("status"))
                     {
                         if (Status == "chat")
                             await SendMessageFromFakePlayerAsync("You are appearing online.");
                         else
                             await SendMessageFromFakePlayerAsync("You are appearing " + Status + ".");
                     }
-                    else if (content.Contains("help", StringComparison.InvariantCultureIgnoreCase))
+                    else if (content.ToLower().Contains("help"))
                     {
                         await SendMessageFromFakePlayerAsync("You can send the following messages to quickly change Deceive settings: online/offline/mobile/enable/disable/status");
                     }
@@ -232,7 +232,7 @@ internal class MainController : ApplicationContext
                 }
                 else
                 {
-                    await Outgoing.WriteAsync(bytes.AsMemory(0, byteCount));
+                    await Outgoing.WriteAsync(bytes, 0, byteCount);
                     Trace.WriteLine("<!--RC TO SERVER-->" + content);
                 }
 
@@ -251,7 +251,7 @@ internal class MainController : ApplicationContext
         finally
         {
             Trace.WriteLine("Incoming closed.");
-            await SaveStatusAsync();
+            SaveStatus();
             if (Connected)
                 OnConnectionErrored();
         }
@@ -266,7 +266,7 @@ internal class MainController : ApplicationContext
 
             do
             {
-                byteCount = await Outgoing.ReadAsync(bytes);
+                byteCount = await Outgoing.ReadAsync(bytes, 0, bytes.Length);
                 var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
 
                 // Insert fake player into roster
@@ -280,12 +280,13 @@ internal class MainController : ApplicationContext
                         "<group priority='9999'>Deceive</group>" +
                         "<id name='&#9;Deceive Active!' tagline=''/><lol name='&#9;Deceive Active!'/>" +
                         "</item>");
-                    await Incoming.WriteAsync(Encoding.UTF8.GetBytes(content));
+                    var contentBytes = Encoding.UTF8.GetBytes(content);
+                    await Incoming.WriteAsync(contentBytes, 0, contentBytes.Length);
                     Trace.WriteLine("<!--DECEIVE TO RC-->" + content);
                 }
                 else
                 {
-                    await Incoming.WriteAsync(bytes.AsMemory(0, byteCount));
+                    await Incoming.WriteAsync(bytes, 0, byteCount);
                     Trace.WriteLine("<!--SERVER TO RC-->" + content);
                 }
             } while (byteCount != 0 && Connected);
@@ -298,7 +299,7 @@ internal class MainController : ApplicationContext
         finally
         {
             Trace.WriteLine("Outgoing closed.");
-            await SaveStatusAsync();
+            SaveStatus();
             if (Connected)
                 OnConnectionErrored();
         }
@@ -378,13 +379,14 @@ internal class MainController : ApplicationContext
 
             var sb = new StringBuilder();
             var xws = new XmlWriterSettings { OmitXmlDeclaration = true, Encoding = Encoding.UTF8, ConformanceLevel = ConformanceLevel.Fragment, Async = true };
-            await using (var xw = XmlWriter.Create(sb, xws))
+            using (var xw = XmlWriter.Create(sb, xws))
             {
                 foreach (var xElement in xml.Root.Elements())
                     xElement.WriteTo(xw);
             }
 
-            await Outgoing.WriteAsync(Encoding.UTF8.GetBytes(sb.ToString()));
+            var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+            await Outgoing.WriteAsync(bytes, 0, bytes.Length);
             Trace.WriteLine("<!--DECEIVE TO SERVER-->" + sb);
         }
         catch (Exception e)
@@ -417,7 +419,7 @@ internal class MainController : ApplicationContext
             "</presence>";
 
         var bytes = Encoding.UTF8.GetBytes(presenceMessage);
-        await Incoming.WriteAsync(bytes);
+        await Incoming.WriteAsync(bytes, 0, bytes.Length);
         Trace.WriteLine("<!--DECEIVE TO RC-->" + presenceMessage);
     }
 
@@ -445,7 +447,7 @@ internal class MainController : ApplicationContext
             $"<message from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' stamp='{stamp}' id='fake-{stamp}' type='chat'><body>{message}</body></message>";
 
         var bytes = Encoding.UTF8.GetBytes(chatMessage);
-        await Incoming.WriteAsync(bytes);
+        await Incoming.WriteAsync(bytes, 0, bytes.Length);
         Trace.WriteLine("<!--DECEIVE TO RC-->" + chatMessage);
     }
 
@@ -470,7 +472,7 @@ internal class MainController : ApplicationContext
             Status = "offline";
     }
 
-    private Task SaveStatusAsync() => File.WriteAllTextAsync(StatusFile, Status);
+    private void SaveStatus() => File.WriteAllText(StatusFile, Status);
 
     private void OnConnectionErrored()
     {

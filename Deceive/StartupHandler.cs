@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -25,7 +25,6 @@ internal static class StartupHandler
     {
         AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
         Application.EnableVisualStyles();
-        Application.SetHighDpiMode(HighDpiMode.SystemAware);
         try
         {
             await StartDeceiveAsync(args, gamePatchline, riotClientParams, gameParams);
@@ -63,13 +62,13 @@ internal static class StartupHandler
 
             if (result is not DialogResult.Yes)
                 return;
-            await Utils.KillProcesses();
+            Utils.KillProcesses();
             await Task.Delay(2000); // Riot Client takes a while to die
         }
 
         try
         {
-            await File.WriteAllTextAsync(Path.Combine(Persistence.DataDir, "debug.log"), string.Empty);
+            File.WriteAllText(Path.Combine(Persistence.DataDir, "debug.log"), string.Empty);
             Trace.Listeners.Add(new TextWriterTraceListener(Path.Combine(Persistence.DataDir, "debug.log")));
             Debug.AutoFlush = true;
             Trace.WriteLine(DeceiveTitle);
@@ -89,7 +88,7 @@ internal static class StartupHandler
         Trace.WriteLine($"Chat proxy listening on port {port}");
 
         // Step 2: Find the Riot Client.
-        var riotClientPath = await Utils.GetRiotClientPath();
+        var riotClientPath = Utils.GetRiotClientPath();
 
         // If the riot client doesn't exist, the user is either severely outdated or has a bugged install.
         if (riotClientPath is null)
@@ -108,7 +107,7 @@ internal static class StartupHandler
 
         // If launching "auto", use the persisted launch game (which defaults to prompt).
         if (game is LaunchGame.Auto)
-            game = await Persistence.GetDefaultLaunchGameAsync();
+            game = Persistence.GetDefaultLaunchGameAsync();
 
         // If prompt, display dialog.
         if (game is LaunchGame.Prompt)
