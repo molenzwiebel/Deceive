@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <OutputType>WinExe</OutputType>
+    <OutputType>Exe</OutputType>
     <LangVersion>8</LangVersion>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
@@ -28,6 +28,7 @@
     <EmbeddedResource Include="Resources\deceive.ico" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="commandlineparser" Version="2.8.0" />
     <PackageReference Include="Costura.Fody" Version="4.1.0" />
     <PackageReference Include="EmbedIO" Version="3.4.3" />
     <PackageReference Include="Fody" Version="6.1.1" />
