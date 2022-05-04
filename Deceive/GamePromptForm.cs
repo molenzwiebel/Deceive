@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Deceive;
@@ -12,18 +11,18 @@ internal partial class GamePromptForm : Form
 
     private void OnFormLoad(object sender, EventArgs e) => Text = StartupHandler.DeceiveTitle;
 
-    private async void OnLoLLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.LoL);
+    private void OnLoLLaunch(object sender, EventArgs e) => HandleLaunchChoiceAsync(LaunchGame.LoL);
 
-    private async void OnLoRLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.LoR);
+    private void OnLoRLaunch(object sender, EventArgs e) => HandleLaunchChoiceAsync(LaunchGame.LoR);
 
-    private async void OnValorantLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.VALORANT);
+    private void OnValorantLaunch(object sender, EventArgs e) => HandleLaunchChoiceAsync(LaunchGame.VALORANT);
 
-    private async void OnRiotClientLaunch(object sender, EventArgs e) => await HandleLaunchChoiceAsync(LaunchGame.RiotClient);
+    private void OnRiotClientLaunch(object sender, EventArgs e) => HandleLaunchChoiceAsync(LaunchGame.RiotClient);
 
-    private async Task HandleLaunchChoiceAsync(LaunchGame game)
+    private void HandleLaunchChoiceAsync(LaunchGame game)
     {
         if (checkboxRemember.Checked)
-            await Persistence.SetDefaultLaunchGameAsync(game);
+            Persistence.SetDefaultLaunchGame(game);
 
         SelectedGame = game;
         DialogResult = DialogResult.OK;

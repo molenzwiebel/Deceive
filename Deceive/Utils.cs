@@ -53,14 +53,14 @@ internal static class Utils
                 return;
 
             // Check if we have shown this before.
-            var latestShownVersion = await Persistence.GetPromptedUpdateVersionAsync();
+            var latestShownVersion = Persistence.GetPromptedUpdateVersionAsync();
 
             // If we have, return.
             if (string.IsNullOrEmpty(latestShownVersion) && latestShownVersion == latestVersion)
                 return;
 
             // Show a message and record the latest shown.
-            await Persistence.SetPromptedUpdateVersionAsync(latestVersion);
+            Persistence.SetPromptedUpdateVersionAsync(latestVersion);
 
             var result = MessageBox.Show(
                 $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
@@ -84,7 +84,7 @@ internal static class Utils
 
     private static IEnumerable<Process> GetProcesses()
     {
-        var riotCandidates = Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Where(process => process.Id != Environment.ProcessId).ToList();
+        var riotCandidates = Process.GetProcessesByName(Process.GetCurrentProcess().ProcessName).Where(process => process.Id != Process.GetCurrentProcess().Id).ToList();
         riotCandidates.AddRange(Process.GetProcessesByName("LeagueClient"));
         riotCandidates.AddRange(Process.GetProcessesByName("LoR"));
         riotCandidates.AddRange(Process.GetProcessesByName("VALORANT-Win64-Shipping"));
@@ -96,7 +96,7 @@ internal static class Utils
     public static bool IsClientRunning() => GetProcesses().Any();
 
     // Kills the running LCU/LoR/VALORANT/RC or Deceive instance, if applicable.
-    public static async Task KillProcesses()
+    public static void KillProcesses()
     {
         foreach (var process in GetProcesses())
         {
@@ -104,13 +104,13 @@ internal static class Utils
             if (process.HasExited)
                 continue;
             process.Kill();
-            await process.WaitForExitAsync();
+            process.WaitForExit();
         }
     }
 
     // Checks for any installed Riot Client configuration,
     // and returns the path of the client if it does. Else, returns null.
-    public static async Task<string?> GetRiotClientPath()
+    public static string? GetRiotClientPath()
     {
         // Find the RiotClientInstalls file.
         var installPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
@@ -118,7 +118,7 @@ internal static class Utils
         if (!File.Exists(installPath))
             return null;
 
-        var data = JsonSerializer.Deserialize<JsonNode>(await File.ReadAllTextAsync(installPath));
+        var data = JsonSerializer.Deserialize<JsonNode>(File.ReadAllText(installPath));
         var rcPaths = new List<string?> { data?["rc_default"]?.ToString(), data?["rc_live"]?.ToString(), data?["rc_beta"]?.ToString() };
 
         return rcPaths.FirstOrDefault(File.Exists);

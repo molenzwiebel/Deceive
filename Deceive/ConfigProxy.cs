@@ -199,13 +199,13 @@ RESPOND:
         ctx.Response.SendChunked = false;
         ctx.Response.ContentLength64 = responseBytes.Length;
         ctx.Response.ContentType = "application/json";
-        await ctx.Response.OutputStream.WriteAsync(responseBytes);
+        await ctx.Response.OutputStream.WriteAsync(responseBytes, 0, responseBytes.Length);
         ctx.Response.OutputStream.Close();
     }
 
     internal class ChatServerEventArgs : EventArgs
     {
-        internal string? ChatHost { get; init; }
-        internal int ChatPort { get; init; }
+        internal string? ChatHost { get; set; }
+        internal int ChatPort { get; set; }
     }
 }
