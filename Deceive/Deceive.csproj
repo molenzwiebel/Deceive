@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <OutputType>Exe</OutputType>
+    <OutputType>WinExe</OutputType>
     <LangVersion>8</LangVersion>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
