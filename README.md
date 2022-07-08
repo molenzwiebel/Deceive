@@ -13,6 +13,9 @@ Once started, Deceive will be a little icon in your notification tray that allow
 **Where can I download Deceive?**  
 Click the [Releases](https://github.com/molenzwiebel/Deceive/releases) tab at the top to download the latest version.
 
+**What dooes Deceive require to run?**
+Decive requires at least 4.8 .Net Framework to be installed [Download](https://dotnet.microsoft.com/download/dotnet-framework/net48)
+
 **Can I still invite people? Can they invite me?**  
 Your friends list will work as normal, which means that you can invite everyone. Your friends will not be able to invite you, even if they enter your name manually.
 
