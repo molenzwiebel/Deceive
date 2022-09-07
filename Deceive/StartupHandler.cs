@@ -94,7 +94,7 @@ internal static class StartupHandler
         if (riotClientPath is null)
         {
             MessageBox.Show(
-                "Deceive was unable to find the path to the Riot Client. Usually this can be resolved by launching any Riot Games game once, then launching Deceive again." +
+                "Deceive was unable to find the path to the Riot Client. Usually this can be resolved by launching any Riot Games game once, then launching Deceive again. " +
                 "If this does not resolve the issue, please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
                 DeceiveTitle,
                 MessageBoxButtons.OK,
@@ -149,13 +149,7 @@ internal static class StartupHandler
         // Kill Deceive when Riot Client has exited, so no ghost Deceive exists.
         if (riotClient is not null)
         {
-            riotClient.EnableRaisingEvents = true;
-            riotClient.Exited += async (_, _) =>
-            {
-                Trace.WriteLine("Exiting on Riot Client exit.");
-                await Task.Delay(3000); // in case of restart, let us kill ourselves elsewhere
-                Environment.Exit(0);
-            };
+            ListenToRiotClientExit(riotClient);
         }
 
         // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
@@ -243,5 +237,27 @@ internal static class StartupHandler
         // Log all unhandled exceptions
         Trace.WriteLine(e.ExceptionObject as Exception);
         Trace.WriteLine(Environment.StackTrace);
+    }
+
+    private static void ListenToRiotClientExit(Process p)
+    {
+        p.EnableRaisingEvents = true;
+        p.Exited += async (sender, e) =>
+        {
+            Trace.WriteLine("Detected Riot Client exit.");
+            await Task.Delay(3000); // wait for a bit to ensure this is not a relaunch triggered by the RC
+
+            var newProcess = Utils.GetRiotClientProcess();
+            if (newProcess is not null)
+            {
+                Trace.WriteLine("A new Riot Client process spawned, monitoring that for exits.");
+                ListenToRiotClientExit(newProcess);
+            }
+            else
+            {
+                Trace.WriteLine("No new clients spawned after waiting, killing ourselves.");
+                Environment.Exit(0);
+            }
+        };
     }
 }

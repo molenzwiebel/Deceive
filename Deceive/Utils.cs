@@ -92,6 +92,9 @@ internal static class Utils
         return riotCandidates;
     }
 
+    // Return the currently running Riot Client process, or null if none are running.
+    public static Process GetRiotClientProcess() => Process.GetProcessesByName("RiotClientServices").FirstOrDefault();
+
     // Checks if there is a running LCU/LoR/VALORANT/RC or Deceive instance.
     public static bool IsClientRunning() => GetProcesses().Any();
 
@@ -118,9 +121,19 @@ internal static class Utils
         if (!File.Exists(installPath))
             return null;
 
-        var data = JsonSerializer.Deserialize<JsonNode>(File.ReadAllText(installPath));
-        var rcPaths = new List<string?> { data?["rc_default"]?.ToString(), data?["rc_live"]?.ToString(), data?["rc_beta"]?.ToString() };
+        try
+        {
+            // occasionally this deserialization may error, because the RC occasionally corrupts its own
+            // configuration file (wtf riot?). we will return null in that case, which will cause a prompt
+            // telling the user to launch a game normally once
+            var data = JsonSerializer.Deserialize<JsonNode>(File.ReadAllText(installPath));
+            var rcPaths = new List<string?> { data?["rc_default"]?.ToString(), data?["rc_live"]?.ToString(), data?["rc_beta"]?.ToString() };
 
-        return rcPaths.FirstOrDefault(File.Exists);
+            return rcPaths.FirstOrDefault(File.Exists);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
