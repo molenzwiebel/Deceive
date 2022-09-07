@@ -107,7 +107,7 @@ internal static class StartupHandler
 
         // If launching "auto", use the persisted launch game (which defaults to prompt).
         if (game is LaunchGame.Auto)
-            game = Persistence.GetDefaultLaunchGameAsync();
+            game = Persistence.GetDefaultLaunchGame();
 
         // If prompt, display dialog.
         if (game is LaunchGame.Prompt)
@@ -213,7 +213,7 @@ internal static class StartupHandler
                 {
                     Trace.WriteLine(e);
                     var result = MessageBox.Show(
-                        "Unable to reconnect to the chat server. Please check your internet connection." +
+                        "Unable to reconnect to the chat server. Please check your internet connection. " +
                         "If this issue persists and you can connect to chat normally without Deceive, " +
                         "please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
                         DeceiveTitle,
@@ -239,10 +239,10 @@ internal static class StartupHandler
         Trace.WriteLine(Environment.StackTrace);
     }
 
-    private static void ListenToRiotClientExit(Process p)
+    private static void ListenToRiotClientExit(Process riotClientProcess)
     {
-        p.EnableRaisingEvents = true;
-        p.Exited += async (sender, e) =>
+        riotClientProcess.EnableRaisingEvents = true;
+        riotClientProcess.Exited += async (sender, e) =>
         {
             Trace.WriteLine("Detected Riot Client exit.");
             await Task.Delay(3000); // wait for a bit to ensure this is not a relaunch triggered by the RC

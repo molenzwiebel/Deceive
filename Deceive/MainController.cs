@@ -352,7 +352,7 @@ internal class MainController : ApplicationContext
                 // Remove Legends of Runeterra presence
                 presence.Element("games")?.Element("bacon")?.Remove();
 
-                // Extracts current VALORANT version from the logs, so that we can show a fake
+                // Extracts current VALORANT from the user's own presence, so that we can show a fake
                 // player with the proper version and avoid "Version Mismatch" from being shown.
                 //
                 // This isn't technically necessary, but people keep coming in and asking whether

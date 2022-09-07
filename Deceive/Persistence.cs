@@ -17,12 +17,12 @@ internal static class Persistence
     }
 
     // Prompted update version.
-    internal static string GetPromptedUpdateVersionAsync() => File.Exists(UpdateVersionPath) ? File.ReadAllText(UpdateVersionPath) : string.Empty;
+    internal static string GetPromptedUpdateVersion() => File.Exists(UpdateVersionPath) ? File.ReadAllText(UpdateVersionPath) : string.Empty;
 
-    internal static void SetPromptedUpdateVersionAsync(string version) => File.WriteAllText(UpdateVersionPath, version);
+    internal static void SetPromptedUpdateVersion(string version) => File.WriteAllText(UpdateVersionPath, version);
 
     // Configured launch option.
-    internal static LaunchGame GetDefaultLaunchGameAsync()
+    internal static LaunchGame GetDefaultLaunchGame()
     {
         if (!File.Exists(DefaultLaunchGamePath))
             return LaunchGame.Prompt;

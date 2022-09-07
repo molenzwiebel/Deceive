@@ -53,14 +53,14 @@ internal static class Utils
                 return;
 
             // Check if we have shown this before.
-            var latestShownVersion = Persistence.GetPromptedUpdateVersionAsync();
+            var latestShownVersion = Persistence.GetPromptedUpdateVersion();
 
             // If we have, return.
             if (string.IsNullOrEmpty(latestShownVersion) && latestShownVersion == latestVersion)
                 return;
 
             // Show a message and record the latest shown.
-            Persistence.SetPromptedUpdateVersionAsync(latestVersion);
+            Persistence.SetPromptedUpdateVersion(latestVersion);
 
             var result = MessageBox.Show(
                 $"There is a new version of Deceive available: {latestVersion}. You are currently using Deceive {DeceiveVersion}. " +
