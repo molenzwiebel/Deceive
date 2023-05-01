@@ -278,7 +278,10 @@ internal class MainController : ApplicationContext
                     content = content.Insert(content.IndexOf(roster, StringComparison.Ordinal) + roster.Length,
                         "<item jid='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' name='&#9;Deceive Active!' subscription='both' puuid='41c322a1-b328-495b-a004-5ccd3e45eae8'>" +
                         "<group priority='9999'>Deceive</group>" +
-                        "<id name='&#9;Deceive Active!' tagline=''/><lol name='&#9;Deceive Active!'/>" +
+                        "<state>online</state>" +
+                        "<id name='Deceive Active!' tagline='...'/>" +
+                        "<lol name='&#9;Deceive Active!'/>" +
+                        "<platforms><riot name='Deceive Active' tagline='...'/></platforms>" +
                         "</item>");
                     var contentBytes = Encoding.UTF8.GetBytes(content);
                     await Incoming.WriteAsync(contentBytes, 0, contentBytes.Length);
@@ -401,7 +404,7 @@ internal class MainController : ApplicationContext
         SentFakePlayerPresence = true;
         // VALORANT requires a recent version to not display "Version Mismatch"
         var valorantPresence = Convert.ToBase64String(
-            Encoding.UTF8.GetBytes($"{{\"isValid\":true,\"partyId\":\"00000000-0000-0000-0000-000000000000\",\"partyClientVersion\":\"{ValorantVersion ?? "unknown"}\"}}")
+            Encoding.UTF8.GetBytes($"{{\"isValid\":true,\"partyId\":\"00000000-0000-0000-0000-000000000000\",\"partyClientVersion\":\"{ValorantVersion ?? "unknown"}\",\"accountLevel\":1000}}")
         );
 
         var randomStanzaId = Guid.NewGuid();
@@ -416,6 +419,7 @@ internal class MainController : ApplicationContext
             $"<bacon><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.l>bacon_availability_online</s.l><s.p>bacon</s.p></bacon>" +
             "</games>" +
             "<show>chat</show>" +
+            "<platform>riot</platform>" +
             "</presence>";
 
         var bytes = Encoding.UTF8.GetBytes(presenceMessage);
