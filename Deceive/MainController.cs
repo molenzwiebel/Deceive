@@ -26,7 +26,7 @@ internal class MainController : ApplicationContext
             BalloonTipTitle = StartupHandler.DeceiveTitle,
             BalloonTipText = "Deceive is currently masking your status. Right-click the tray icon for more options."
         };
-        TrayIcon.ShowBalloonTip(5000);
+        //TrayIcon.ShowBalloonTip(5000);
 
         LoadStatus();
         UpdateTray();
