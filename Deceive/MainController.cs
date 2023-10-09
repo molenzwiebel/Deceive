@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net.Security;
 using System.Text;
 using System.Text.Json;
@@ -25,7 +26,7 @@ internal class MainController : ApplicationContext
             BalloonTipTitle = StartupHandler.DeceiveTitle,
             BalloonTipText = "Deceive is currently masking your status. Right-click the tray icon for more options."
         };
-        TrayIcon.ShowBalloonTip(5000);
+        //TrayIcon.ShowBalloonTip(5000);
 
         LoadStatus();
         UpdateTray();
@@ -36,6 +37,7 @@ internal class MainController : ApplicationContext
     private string Status { get; set; } = null!;
     private string StatusFile { get; } = Path.Combine(Persistence.DataDir, "status");
     private bool ConnectToMuc { get; set; } = true;
+    private bool FriendChatEnabled { get; set; } = true;
     private bool InsertedFakePlayer { get; set; }
     private bool SentFakePlayerPresence { get; set; }
     private bool SentIntroductionText { get; set; }
@@ -47,6 +49,7 @@ internal class MainController : ApplicationContext
     private string LastPresence { get; set; } = null!; // we resend this if the state changes
 
     private ToolStripMenuItem EnabledMenuItem { get; set; } = null!;
+    private ToolStripMenuItem FriendChat { get; set; } = null!;
     private ToolStripMenuItem ChatStatus { get; set; } = null!;
     private ToolStripMenuItem OfflineStatus { get; set; } = null!;
     private ToolStripMenuItem MobileStatus { get; set; } = null!;
@@ -63,34 +66,45 @@ internal class MainController : ApplicationContext
             await UpdateStatusAsync(Enabled ? Status : "chat");
             await SendMessageFromFakePlayerAsync(Enabled ? "Deceive is now enabled." : "Deceive is now disabled.");
             UpdateTray();
-        }) { Checked = Enabled };
+        })
+        { Checked = Enabled };
 
         var mucMenuItem = new ToolStripMenuItem("Enable lobby chat", null, (_, _) =>
         {
             ConnectToMuc = !ConnectToMuc;
             UpdateTray();
-        }) { Checked = ConnectToMuc };
+        })
+        { Checked = ConnectToMuc };
 
+        FriendChat = new ToolStripMenuItem("Enable friend chat", null, (_, _) => {
+            FriendChatEnabled = !FriendChatEnabled;
+            UpdateTray();
+            Incoming.Close();
+        })
+        { Checked = FriendChatEnabled };
         ChatStatus = new ToolStripMenuItem("Online", null, async (_, _) =>
         {
             await UpdateStatusAsync(Status = "chat");
             Enabled = true;
             UpdateTray();
-        }) { Checked = Status.Equals("chat") };
+        })
+        { Checked = Status.Equals("chat") };
 
         OfflineStatus = new ToolStripMenuItem("Offline", null, async (_, _) =>
         {
             await UpdateStatusAsync(Status = "offline");
             Enabled = true;
             UpdateTray();
-        }) { Checked = Status.Equals("offline") };
+        })
+        { Checked = Status.Equals("offline") };
 
         MobileStatus = new ToolStripMenuItem("Mobile", null, async (_, _) =>
         {
             await UpdateStatusAsync(Status = "mobile");
             Enabled = true;
             UpdateTray();
-        }) { Checked = Status.Equals("mobile") };
+        })
+        { Checked = Status.Equals("mobile") };
 
         var typeMenuItem = new ToolStripMenuItem("Status Type", null, ChatStatus, OfflineStatus, MobileStatus);
 
@@ -143,7 +157,7 @@ internal class MainController : ApplicationContext
 
         TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[]
         {
-            aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, closeIn, closeOut, createFakePlayer, sendTestMsg, restartWithDifferentGameItem, quitMenuItem
+            aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, FriendChat, closeIn, closeOut, createFakePlayer, sendTestMsg, restartWithDifferentGameItem, quitMenuItem
         });
 #else
         TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem });
@@ -179,7 +193,7 @@ internal class MainController : ApplicationContext
                 if (content.Contains("<presence") && Enabled)
                 {
                     Trace.WriteLine("<!--RC TO SERVER ORIGINAL-->" + content);
-                    await PossiblyRewriteAndResendPresenceAsync(content, Status);
+                    await PossiblyRewriteAndResendPresenceAsync(content, Status, FriendChatEnabled);
                 }
                 else if (content.Contains("41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net"))
                 {
@@ -308,7 +322,7 @@ internal class MainController : ApplicationContext
         }
     }
 
-    private async Task PossiblyRewriteAndResendPresenceAsync(string content, string targetStatus)
+    private async Task PossiblyRewriteAndResendPresenceAsync(string content, string targetStatus, bool friendchat)
     {
         try
         {
@@ -323,6 +337,15 @@ internal class MainController : ApplicationContext
 
             foreach (var presence in xml.Root.Elements())
             {
+                if (friendchat == false)
+                {
+                    presence.Descendants("show").FirstOrDefault().Remove();
+                }
+                else
+                {
+                    presence.AddBeforeSelf(new XElement("show", "chat"));
+                }
+
                 if (presence.Name != "presence")
                     continue;
                 if (presence.Attribute("to") is not null)
@@ -460,7 +483,7 @@ internal class MainController : ApplicationContext
         if (string.IsNullOrEmpty(LastPresence))
             return;
 
-        await PossiblyRewriteAndResendPresenceAsync(LastPresence, newStatus);
+        await PossiblyRewriteAndResendPresenceAsync(LastPresence, newStatus, FriendChatEnabled);
 
         if (newStatus == "chat")
             await SendMessageFromFakePlayerAsync("You are now appearing online.");
