@@ -59,49 +59,7 @@ internal class ProxiedConnection
                 }
                 else if (content.Contains("41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net"))
                 {
-                    if (content.ToLower().Contains("offline"))
-                    {
-                        if (!MainController.Enabled)
-                            await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
-                        MainController.OfflineStatus.PerformClick();
-                    }
-                    else if (content.ToLower().Contains("mobile"))
-                    {
-                        if (!MainController.Enabled)
-                            await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
-                        MainController.MobileStatus.PerformClick();
-                    }
-                    else if (content.ToLower().Contains("online"))
-                    {
-                        if (!MainController.Enabled)
-                            await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
-                        MainController.ChatStatus.PerformClick();
-                    }
-                    else if (content.ToLower().Contains("enable"))
-                    {
-                        if (MainController.Enabled)
-                            await SendMessageFromFakePlayerAsync("Deceive is already enabled.");
-                        else
-                            MainController.EnabledMenuItem.PerformClick();
-                    }
-                    else if (content.ToLower().Contains("disable"))
-                    {
-                        if (!MainController.Enabled)
-                            await SendMessageFromFakePlayerAsync("Deceive is already disabled.");
-                        else
-                            MainController.EnabledMenuItem.PerformClick();
-                    }
-                    else if (content.ToLower().Contains("status"))
-                    {
-                        if (MainController.Status == "chat")
-                            await SendMessageFromFakePlayerAsync("You are appearing online.");
-                        else
-                            await SendMessageFromFakePlayerAsync("You are appearing " + MainController.Status + ".");
-                    }
-                    else if (content.ToLower().Contains("help"))
-                    {
-                        await SendMessageFromFakePlayerAsync("You can send the following messages to quickly change Deceive settings: online/offline/mobile/enable/disable/status");
-                    }
+                    await MainController.HandleChatMessage(content);
 
                     //Don't send anything involving our fake user to chat servers
                     Trace.WriteLine("<!--RC TO SERVER REMOVED-->" + content);

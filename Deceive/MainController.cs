@@ -39,10 +39,10 @@ internal class MainController : ApplicationContext
     private bool SentIntroductionText { get; set; } = false;
     private CancellationTokenSource? ShutdownToken { get; set; } = null;
 
-    public ToolStripMenuItem EnabledMenuItem { get; set; } = null!;
-    public ToolStripMenuItem ChatStatus { get; set; } = null!;
-    public ToolStripMenuItem OfflineStatus { get; set; } = null!;
-    public ToolStripMenuItem MobileStatus { get; set; } = null!;
+    private ToolStripMenuItem EnabledMenuItem { get; set; } = null!;
+    private ToolStripMenuItem ChatStatus { get; set; } = null!;
+    private ToolStripMenuItem OfflineStatus { get; set; } = null!;
+    private ToolStripMenuItem MobileStatus { get; set; } = null!;
 
     private List<ProxiedConnection> Connections { get; } = new();
 
@@ -223,6 +223,53 @@ internal class MainController : ApplicationContext
 #else
         TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem });
 #endif
+    }
+
+    public async Task HandleChatMessage(string content)
+    {
+        if (content.ToLower().Contains("offline"))
+        {
+            if (!Enabled)
+                await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
+            OfflineStatus.PerformClick();
+        }
+        else if (content.ToLower().Contains("mobile"))
+        {
+            if (!Enabled)
+                await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
+            MobileStatus.PerformClick();
+        }
+        else if (content.ToLower().Contains("online"))
+        {
+            if (!Enabled)
+                await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
+            ChatStatus.PerformClick();
+        }
+        else if (content.ToLower().Contains("enable"))
+        {
+            if (Enabled)
+                await SendMessageFromFakePlayerAsync("Deceive is already enabled.");
+            else
+                EnabledMenuItem.PerformClick();
+        }
+        else if (content.ToLower().Contains("disable"))
+        {
+            if (!Enabled)
+                await SendMessageFromFakePlayerAsync("Deceive is already disabled.");
+            else
+                EnabledMenuItem.PerformClick();
+        }
+        else if (content.ToLower().Contains("status"))
+        {
+            if (Status == "chat")
+                await SendMessageFromFakePlayerAsync("You are appearing online.");
+            else
+                await SendMessageFromFakePlayerAsync("You are appearing " + Status + ".");
+        }
+        else if (content.ToLower().Contains("help"))
+        {
+            await SendMessageFromFakePlayerAsync("You can send the following messages to quickly change Deceive settings: online/offline/mobile/enable/disable/status");
+        }
     }
 
     private async Task SendIntroductionTextAsync()
