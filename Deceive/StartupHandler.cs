@@ -79,7 +79,7 @@ internal static class StartupHandler
         _ = Utils.CheckForUpdatesAsync();
 
         // Step 1: Open a port for our chat proxy, so we can patch chat port into clientconfig.
-        var listener = new TcpListener(IPAddress.Loopback, 30000);
+        var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         Trace.WriteLine($"Chat proxy listening on port {port}");
