@@ -2,12 +2,9 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
-using System.Net.Security;
 using System.Net.Sockets;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using Deceive.Properties;
 
 namespace Deceive;
 
@@ -82,7 +79,7 @@ internal static class StartupHandler
         _ = Utils.CheckForUpdatesAsync();
 
         // Step 1: Open a port for our chat proxy, so we can patch chat port into clientconfig.
-        var listener = new TcpListener(IPAddress.Loopback, 0);
+        var listener = new TcpListener(IPAddress.Loopback, 30000);
         listener.Start();
         var port = ((IPEndPoint)listener.LocalEndpoint).Port;
         Trace.WriteLine($"Chat proxy listening on port {port}");
@@ -152,83 +149,22 @@ internal static class StartupHandler
             ListenToRiotClientExit(riotClient);
         }
 
+        var mainController = new MainController();
+
         // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
-        string? chatHost = null;
-        var chatPort = 0;
+        var servingClients = false;
         proxyServer.PatchedChatServer += (_, args) =>
         {
-            chatHost = args.ChatHost;
-            chatPort = args.ChatPort;
-            Trace.WriteLine($"The original chat server details were {chatHost}:{chatPort}");
+            Trace.WriteLine($"The original chat server details were {args.ChatHost}:{args.ChatPort}");
+
+            // Step 6: Start serving incoming connections and proxy them!
+            if (servingClients)
+                return;
+            servingClients = true;
+            mainController.StartServingClients(listener, args.ChatHost, args.ChatPort);
         };
 
-        Trace.WriteLine("Waiting for client to connect to chat server...");
-        var incoming = await listener.AcceptTcpClientAsync();
-        Trace.WriteLine("Client connected!");
-
-        // Step 6: Connect sockets.
-        var sslIncoming = new SslStream(incoming.GetStream());
-        var cert = new X509Certificate2(Resources.Certificate);
-        await sslIncoming.AuthenticateAsServerAsync(cert);
-
-        if (chatHost is null)
-        {
-            MessageBox.Show(
-                "Deceive was unable to find Riot's chat server, please try again later. " +
-                "If this issue persists and you can connect to chat normally without Deceive, " +
-                "please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
-                DeceiveTitle,
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Error,
-                MessageBoxDefaultButton.Button1
-            );
-            return;
-        }
-
-        var outgoing = new TcpClient(chatHost, chatPort);
-        var sslOutgoing = new SslStream(outgoing.GetStream());
-        await sslOutgoing.AuthenticateAsClientAsync(chatHost);
-
-        // Step 7: All sockets are now connected, start tray icon.
-        var mainController = new MainController();
-        mainController.StartThreads(sslIncoming, sslOutgoing);
-        mainController.ConnectionErrored += async (_, _) =>
-        {
-            Trace.WriteLine("Trying to reconnect.");
-            sslIncoming.Close();
-            sslOutgoing.Close();
-            incoming.Close();
-            outgoing.Close();
-
-            incoming = await listener.AcceptTcpClientAsync();
-            sslIncoming = new SslStream(incoming.GetStream());
-            await sslIncoming.AuthenticateAsServerAsync(cert);
-            while (true)
-                try
-                {
-                    outgoing = new TcpClient(chatHost, chatPort);
-                    break;
-                }
-                catch (SocketException e)
-                {
-                    Trace.WriteLine(e);
-                    var result = MessageBox.Show(
-                        "Unable to reconnect to the chat server. Please check your internet connection. " +
-                        "If this issue persists and you can connect to chat normally without Deceive, " +
-                        "please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
-                        DeceiveTitle,
-                        MessageBoxButtons.RetryCancel,
-                        MessageBoxIcon.Error,
-                        MessageBoxDefaultButton.Button1
-                    );
-                    if (result == DialogResult.Cancel)
-                        Environment.Exit(0);
-                }
-
-            sslOutgoing = new SslStream(outgoing.GetStream());
-            await sslOutgoing.AuthenticateAsClientAsync(chatHost);
-            mainController.StartThreads(sslIncoming, sslOutgoing);
-        };
+        // Loop infinitely and handle window messages/tray icon.
         Application.Run(mainController);
     }
 
