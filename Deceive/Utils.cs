@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -101,13 +102,33 @@ internal static class Utils
     // Kills the running LCU/LoR/VALORANT/RC or Deceive instance, if applicable.
     public static void KillProcesses()
     {
-        foreach (var process in GetProcesses())
+        try
         {
-            process.Refresh();
-            if (process.HasExited)
-                continue;
-            process.Kill();
-            process.WaitForExit();
+            foreach (var process in GetProcesses())
+            {
+                process.Refresh();
+                if (process.HasExited)
+                    continue;
+                process.Kill();
+                process.WaitForExit();
+            }
+        } catch (Win32Exception ex)
+        {
+            // thank you C# and your horrible win32 ecosystem integration, I have no clue if this is correct
+            if (ex.NativeErrorCode == -2147467259 || ex.ErrorCode == -2147467259 || ex.ErrorCode == 5 || ex.NativeErrorCode == 5)
+            {
+                // ERROR_ACCESS_DENIED
+                MessageBox.Show(
+                    "Deceive could not stop existing Riot processes because it does not have the right permissions. Please relaunch this application as an administrator and try again.",
+                    StartupHandler.DeceiveTitle,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button1
+                );
+                Environment.Exit(0);
+            }
+
+            throw ex;
         }
     }
 

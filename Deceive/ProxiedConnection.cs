@@ -108,9 +108,9 @@ internal class ProxiedConnection
                         "<item jid='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' name='&#9;Deceive Active!' subscription='both' puuid='41c322a1-b328-495b-a004-5ccd3e45eae8'>" +
                         "<group priority='9999'>Deceive</group>" +
                         "<state>online</state>" +
-                        "<id name='Deceive Active!' tagline='...'/>" +
+                        "<id name='&#9;Deceive Active!' tagline='...'/>" +
                         "<lol name='&#9;Deceive Active!'/>" +
-                        "<platforms><riot name='Deceive Active' tagline='...'/></platforms>" +
+                        "<platforms><riot name='&#9;Deceive Active' tagline='...'/></platforms>" +
                         "</item>");
                     var contentBytes = Encoding.UTF8.GetBytes(content);
                     await Incoming.WriteAsync(contentBytes, 0, contentBytes.Length);
@@ -240,13 +240,14 @@ internal class ProxiedConnection
         var presenceMessage =
             $"<presence from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' id='b-{randomStanzaId}'>" +
             "<games>" +
-            $"<keystone><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>keystone</s.p></keystone>" +
-            $"<league_of_legends><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>league_of_legends</s.p><p>{{&quot;pty&quot;:true}}</p></league_of_legends>" + // No Region s.r keeps it in the main "League" category rather than "Other Servers" in every region with "Group Games & Servers" active
-            $"<valorant><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>valorant</s.p><p>{valorantPresence}</p></valorant>" +
+            $"<keystone><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>keystone</s.p><pty/></keystone>" +
+            $"<league_of_legends><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>league_of_legends</s.p><s.c>live</s.c><p>{{&quot;pty&quot;:true}}</p></league_of_legends>" + // No Region s.r keeps it in the main "League" category rather than "Other Servers" in every region with "Group Games & Servers" active
+            $"<valorant><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.p>valorant</s.p><s.r>PC</s.r><p>{valorantPresence}</p><pty/></valorant>" +
             $"<bacon><st>chat</st><s.t>{unixTimeMilliseconds}</s.t><s.l>bacon_availability_online</s.l><s.p>bacon</s.p></bacon>" +
             "</games>" +
             "<show>chat</show>" +
             "<platform>riot</platform>" +
+            "<status/>" +
             "</presence>";
 
         var bytes = Encoding.UTF8.GetBytes(presenceMessage);
