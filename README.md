@@ -6,7 +6,7 @@
 
 Deceive allows you to appear offline in League of Legends, VALORANT and Legends of Runeterra without any loss of functionality! Talk to your friends, communicate in champion select and queue up together, all while sneakily appearing offline to all your friends.
 
-Once started, Deceive will be a little icon in your notification tray that allows you to manage your chat presence, whether it be online, offline, or moblie.
+Once started, Deceive will be a little icon in your notification tray that allows you to manage your chat presence, whether it be online, offline, or mobile.
 
 # FAQ
 
