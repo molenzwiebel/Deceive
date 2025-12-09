@@ -1,0 +1,25 @@
+name: Windows Build (.NET Framework 4.7.2)
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore Deceive.sln
+
+      - name: Build solution
+        run: msbuild Deceive.sln /p:Configuration=Release

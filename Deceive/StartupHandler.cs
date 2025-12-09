@@ -163,7 +163,10 @@ internal static class StartupHandler
             if (servingClients)
                 return;
             servingClients = true;
-            mainController.StartServingClients(listener, args.ChatHost, args.ChatPort);
+            if (args.ChatHost is not null)
+            {
+                mainController.StartServingClients(listener, args.ChatHost, args.ChatPort);
+            }
         };
 
         // Loop infinitely and handle window messages/tray icon.
