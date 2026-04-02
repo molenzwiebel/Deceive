@@ -22,7 +22,7 @@ jobs:
         run: nuget restore Deceive.sln
 
       - name: Build solution
-        run: msbuild Deceive.sln /p:Configuration=Release
+        run: msbuild Deceive.sln /p:Configuration=Release /p:OutDir=${{ github.workspace }}\output\
 
       - name: Upload release artifact
         uses: softprops/action-gh-release@v2
@@ -30,4 +30,4 @@ jobs:
           tag_name: latest
           name: Latest Build
           prerelease: true
-          files: Deceive/bin/Release/Deceive.exe
+          files: output/Deceive.exe
