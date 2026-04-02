@@ -9,6 +9,7 @@ internal static class Persistence
 
     private static readonly string UpdateVersionPath = Path.Combine(DataDir, "updateVersionPrompted");
     private static readonly string DefaultLaunchGamePath = Path.Combine(DataDir, "launchGame");
+    private static readonly string StartupStatusPath = Path.Combine(DataDir, "startupStatus");
 
     static Persistence()
     {
@@ -35,4 +36,9 @@ internal static class Persistence
     }
 
     internal static void SetDefaultLaunchGame(LaunchGame game) => File.WriteAllText(DefaultLaunchGamePath, game.ToString());
+
+    // Startup status: "chat", "offline", "mobile", or "last" (remember last session).
+    internal static string GetStartupStatus() => File.Exists(StartupStatusPath) ? File.ReadAllText(StartupStatusPath) : "last";
+
+    internal static void SetStartupStatus(string status) => File.WriteAllText(StartupStatusPath, status);
 }
