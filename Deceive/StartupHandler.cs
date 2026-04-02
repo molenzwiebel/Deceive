@@ -79,11 +79,19 @@ internal static class StartupHandler
         // Step 0: Check for updates in the background.
         _ = Utils.CheckForUpdatesAsync();
 
+        var killSwitchMode = Persistence.GetKillSwitchMode();
+
         // Step 1: Open a port for our chat proxy, so we can patch chat port into clientconfig.
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        Trace.WriteLine($"Chat proxy listening on port {port}");
+        // Skipped in kill switch mode — the game connects directly to Riot's servers as normal.
+        TcpListener? listener = null;
+        int port = 0;
+        if (!killSwitchMode)
+        {
+            listener = new TcpListener(IPAddress.Loopback, 0);
+            listener.Start();
+            port = ((IPEndPoint)listener.LocalEndpoint).Port;
+            Trace.WriteLine($"Chat proxy listening on port {port}");
+        }
 
         // Step 2: Find the Riot Client.
         var riotClientPath = Utils.GetRiotClientPath();
@@ -128,11 +136,15 @@ internal static class StartupHandler
             var x => throw new Exception("Unexpected LaunchGame: " + x)
         };
 
-        // Step 3: Start proxy web server for clientconfig
-        var proxyServer = new ConfigProxy(port);
+        // Step 3: Start proxy web server for clientconfig (skipped in kill switch mode)
+        ConfigProxy? proxyServer = killSwitchMode ? null : new ConfigProxy(port);
 
         // Step 4: Launch Riot Client (+game)
-        var startArgs = new ProcessStartInfo { FileName = riotClientPath, Arguments = $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\"" };
+        var startArgs = new ProcessStartInfo
+        {
+            FileName = riotClientPath,
+            Arguments = proxyServer is not null ? $"--client-config-url=\"http://127.0.0.1:{proxyServer.ConfigPort}\"" : ""
+        };
 
         if (launchProduct is not null)
             startArgs.Arguments += $" --launch-product={launchProduct} --launch-patchline={gamePatchline}";
@@ -154,20 +166,24 @@ internal static class StartupHandler
         var mainController = new MainController();
 
         // Step 5: Get chat server and port for this player by listening to event from ConfigProxy.
-        var servingClients = false;
-        proxyServer.PatchedChatServer += (_, args) =>
+        // Skipped entirely in kill switch mode.
+        if (proxyServer is not null)
         {
-            Trace.WriteLine($"The original chat server details were {args.ChatHost}:{args.ChatPort}");
-
-            // Step 6: Start serving incoming connections and proxy them!
-            if (servingClients)
-                return;
-            servingClients = true;
-            if (args.ChatHost is not null)
+            var servingClients = false;
+            proxyServer.PatchedChatServer += (_, args) =>
             {
-                mainController.StartServingClients(listener, args.ChatHost, args.ChatPort);
-            }
-        };
+                Trace.WriteLine($"The original chat server details were {args.ChatHost}:{args.ChatPort}");
+
+                // Step 6: Start serving incoming connections and proxy them!
+                if (servingClients)
+                    return;
+                servingClients = true;
+                if (args.ChatHost is not null)
+                {
+                    mainController.StartServingClients(listener!, args.ChatHost, args.ChatPort);
+                }
+            };
+        }
 
         // Loop infinitely and handle window messages/tray icon.
         Application.Run(mainController);

@@ -41,4 +41,9 @@ internal static class Persistence
     internal static string GetStartupStatus() => File.Exists(StartupStatusPath) ? File.ReadAllText(StartupStatusPath) : "last";
 
     internal static void SetStartupStatus(string status) => File.WriteAllText(StartupStatusPath, status);
+
+    // Kill switch mode: launch the game normally without any chat proxy interception.
+    private static readonly string KillSwitchModePath = Path.Combine(DataDir, "killSwitchMode");
+    internal static bool GetKillSwitchMode() => File.Exists(KillSwitchModePath) && File.ReadAllText(KillSwitchModePath) == "true";
+    internal static void SetKillSwitchMode(bool enabled) => File.WriteAllText(KillSwitchModePath, enabled ? "true" : "false");
 }

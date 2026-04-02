@@ -130,6 +130,29 @@ internal class MainController : ApplicationContext
     {
         var aboutMenuItem = new ToolStripMenuItem(StartupHandler.DeceiveTitle) { Enabled = false };
 
+        var killSwitchMode = Persistence.GetKillSwitchMode();
+        var killSwitchMenuItem = new ToolStripMenuItem("Kill Switch Mode (no chat proxy)", null, (_, _) =>
+        {
+            Persistence.SetKillSwitchMode(!killSwitchMode);
+            var result = MessageBox.Show(
+                killSwitchMode
+                    ? "Kill Switch Mode disabled. Restart Deceive to apply status masking again?"
+                    : "Kill Switch Mode enabled. Restart Deceive to launch without chat proxy interception?",
+                StartupHandler.DeceiveTitle,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question,
+                MessageBoxDefaultButton.Button1
+            );
+            if (result is not DialogResult.Yes)
+                return;
+
+            Utils.KillProcesses();
+            Thread.Sleep(2000);
+            Process.Start(Application.ExecutablePath);
+            Environment.Exit(0);
+        })
+        { Checked = killSwitchMode };
+
         EnabledMenuItem = new ToolStripMenuItem("Enabled", null, async (_, _) =>
         {
             Enabled = !Enabled;
@@ -244,15 +267,21 @@ internal class MainController : ApplicationContext
 
         TrayIcon.ContextMenuStrip = new ContextMenuStrip();
 
+        // In kill switch mode, hide all chat/status-related items — they have no effect.
+        EnabledMenuItem.Visible = !killSwitchMode;
+        typeMenuItem.Visible = !killSwitchMode;
+        startupStatusMenuItem.Visible = !killSwitchMode;
+        mucMenuItem.Visible = !killSwitchMode;
+
 #if DEBUG
         var sendTestMsg = new ToolStripMenuItem("Send message", null, async (_, _) => { await SendMessageFromFakePlayerAsync("Test"); });
 
         TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[]
         {
-            aboutMenuItem, EnabledMenuItem, typeMenuItem, startupStatusMenuItem, mucMenuItem, sendTestMsg, restartWithDifferentGameItem, quitMenuItem
+            aboutMenuItem, killSwitchMenuItem, EnabledMenuItem, typeMenuItem, startupStatusMenuItem, mucMenuItem, sendTestMsg, restartWithDifferentGameItem, quitMenuItem
         });
 #else
-        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, startupStatusMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem });
+        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, killSwitchMenuItem, EnabledMenuItem, typeMenuItem, startupStatusMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem });
 #endif
     }
 
