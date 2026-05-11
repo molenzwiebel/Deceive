@@ -58,6 +58,12 @@ internal static class Persistence
     }
     
     internal static void SetCachedCertificate(byte[] certBytes) => File.WriteAllBytes(CachedCertPath, certBytes);
+
+    internal static void DeleteCachedCertificate()
+    {
+        if (File.Exists(CachedCertPath))
+            File.Delete(CachedCertPath);
+    }
     
     // Startup status: "chat", "offline", "mobile", or "last" (remember last session).
     internal static string GetStartupStatus() => File.Exists(StartupStatusPath) ? File.ReadAllText(StartupStatusPath) : "last";
