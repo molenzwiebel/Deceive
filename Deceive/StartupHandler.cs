@@ -175,7 +175,16 @@ internal static class StartupHandler
             startArgs.Arguments += $" --launch-product={launchProduct} --launch-patchline={gamePatchline}";
 
         if (riotClientParams is not null)
-            startArgs.Arguments += $" {riotClientParams}";
+        {
+            if (riotClientParams.Contains("--client-config-url", StringComparison.OrdinalIgnoreCase))
+            {
+                Trace.WriteLine("Ignoring riotClientParams containing --client-config-url to prevent proxy bypass.");
+            }
+            else
+            {
+                startArgs.Arguments += $" {riotClientParams}";
+            }
+        }
 
         if (gameParams is not null)
             startArgs.Arguments += $" -- {gameParams}";

@@ -75,8 +75,11 @@ internal static class Utils
             );
 
             if (result is DialogResult.OK)
-                // Open the url in the browser.
-                Process.Start(release?["html_url"]?.ToString()!);
+            {
+                var htmlUrl = release?["html_url"]?.ToString();
+                if (!string.IsNullOrEmpty(htmlUrl) && htmlUrl.StartsWith("https://github.com/", StringComparison.Ordinal))
+                    Process.Start(htmlUrl);
+            }
         }
         catch
         {
@@ -163,6 +166,8 @@ internal static class Utils
         }
     }
 
+    private const string ExpectedCertDomain = "deceive-localhost.molenzwiebel.xyz";
+
     // Returns a certificate for deceive-localhost.molenzwiebel.xyz, either from cache or by downloading
     // the current one from the server. The returned certificate will be valid for at least 20 days.
     public static async Task<X509Certificate2?> GetProxyCertificateAsync()
@@ -170,8 +175,16 @@ internal static class Utils
         var cachedCert = Persistence.GetCachedCertificate();
         if (cachedCert is not null && cachedCert.NotAfter > DateTime.Now.AddDays(20))
         {
-            Trace.WriteLine($"Cached certificate is valid until {cachedCert.NotAfter}, using cached certificate.");
-            return cachedCert;
+            if (!ValidateProxyCertificate(cachedCert))
+            {
+                Trace.WriteLine("Cached certificate failed domain validation, discarding.");
+                Persistence.DeleteCachedCertificate();
+            }
+            else
+            {
+                Trace.WriteLine($"Cached certificate is valid until {cachedCert.NotAfter}, using cached certificate.");
+                return cachedCert;
+            }
         }
 
         try
@@ -184,6 +197,13 @@ internal static class Utils
             response.EnsureSuccessStatusCode();
             var certBytes = await response.Content.ReadAsByteArrayAsync();
             var cert = new X509Certificate2(certBytes);
+
+            if (!ValidateProxyCertificate(cert))
+            {
+                Trace.WriteLine("Downloaded certificate failed domain validation, refusing to use it.");
+                return null;
+            }
+
             Persistence.SetCachedCertificate(certBytes);
             return cert;
         }
@@ -193,6 +213,14 @@ internal static class Utils
             Trace.WriteLine($"Failed to download certificate: {ex}");
             return null;
         }
+    }
+
+    private static bool ValidateProxyCertificate(X509Certificate2 cert)
+    {
+        var san = cert.Extensions["2.5.29.17"]?.Format(false) ?? string.Empty;
+        var cn = cert.GetNameInfo(X509NameType.DnsName, false);
+        return cn.Equals(ExpectedCertDomain, StringComparison.OrdinalIgnoreCase) ||
+               san.Contains(ExpectedCertDomain, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool DeceiveLocalhostResolves()
