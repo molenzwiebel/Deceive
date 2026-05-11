@@ -29,13 +29,16 @@ internal class ConfigProxy
     {
         ChatPort = chatPort;
 
-        // Find a free port.
+        // Bind to port 0 to get a free port from the OS. Keep the listener alive until
+        // the web server is ready to prevent another process from stealing the port.
         var l = new TcpListener(IPAddress.Loopback, 0);
         l.Start();
         var port = ((IPEndPoint)l.LocalEndpoint).Port;
-        l.Stop();
 
         ConfigPort = port;
+
+        // Release the probe listener just before the web server binds the same port.
+        l.Stop();
 
         // Start a web server that sends everything to ProxyAndRewriteResponse
         var server = new WebServer(o => o
@@ -97,7 +100,7 @@ internal class ConfigProxy
         Trace.WriteLine("Received response from clientconfig service with status code: " + result.StatusCode);
         var content = await result.Content.ReadAsStringAsync();
         var modifiedContent = content;
-        Trace.WriteLine("ORIGINAL CLIENTCONFIG: " + content);
+        Trace.WriteLine("Received CLIENTCONFIG response (content omitted from logs to protect player data).");
 
         // sometimes riot yields an internal error with content that is definitely
         // not json. we can just forward it to the riot client, which will retry
@@ -139,7 +142,7 @@ internal class ConfigProxy
                     try
                     {
                         var pasJwt = await (await Client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
-                        Trace.WriteLine("PAS JWT:" + pasJwt);
+                        Trace.WriteLine("Received PAS JWT (value omitted from logs).");
                         var pasJwtContent = pasJwt.Split('.')[1];
                         var validBase64 = pasJwtContent.PadRight((pasJwtContent.Length / 4 * 4) + (pasJwtContent.Length % 4 == 0 ? 0 : 4), '=');
                         var pasJwtString = Encoding.UTF8.GetString(Convert.FromBase64String(validBase64));
@@ -164,7 +167,7 @@ internal class ConfigProxy
             }
 
             modifiedContent = JsonSerializer.Serialize(configObject);
-            Trace.WriteLine("MODIFIED CLIENTCONFIG: " + modifiedContent);
+            Trace.WriteLine("Rewrote CLIENTCONFIG chat endpoints to local proxy.");
 
             if (riotChatHost is not null && riotChatPort != 0)
                 PatchedChatServer?.Invoke(this, new ChatServerEventArgs { ChatHost = riotChatHost, ChatPort = riotChatPort });
