@@ -67,7 +67,8 @@ internal class ProxiedConnection
                 else
                 {
                     await Outgoing.WriteAsync(bytes, 0, byteCount);
-                    Trace.WriteLine("<!--RC TO SERVER-->" + content);
+                    // don't log anything that contains a JWT
+                    if (!content.Contains("token>")) Trace.WriteLine("<!--RC TO SERVER-->" + content);
                 }
 
                 if (InsertedFakePlayer && !SentFakePlayerPresence)

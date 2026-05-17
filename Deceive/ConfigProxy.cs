@@ -139,7 +139,6 @@ internal class ConfigProxy
                     try
                     {
                         var pasJwt = await (await Client.SendAsync(pasRequest)).Content.ReadAsStringAsync();
-                        Trace.WriteLine("PAS JWT:" + pasJwt);
                         var pasJwtContent = pasJwt.Split('.')[1];
                         var validBase64 = pasJwtContent.PadRight((pasJwtContent.Length / 4 * 4) + (pasJwtContent.Length % 4 == 0 ? 0 : 4), '=');
                         var pasJwtString = Encoding.UTF8.GetString(Convert.FromBase64String(validBase64));
