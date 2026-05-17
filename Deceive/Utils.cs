@@ -218,41 +218,18 @@ internal static class Utils
             return;
 
         var result = MessageBox.Show(
-            "Your machine is failing to resolve some required domains. This can be fixed by switching to a different DNS server or by " +
-            "letting Deceive add a manual hosts entry for you. If you press Yes, Deceive will attempt to automatically fix this for you by " + 
-            "editing your hosts file (requires administrator permissions). If you press No, Deceive will exit. See the FAQ on GitHub for more details.",
+            "Your machine is failing to resolve some required domains. You will need to switch DNS servers or add an entry to your hosts file. Please see the Deceive FAQ for more information. Deceive will not work until this issue is resolved. Would you like to open the FAQ now?",
             StartupHandler.DeceiveTitle,
             MessageBoxButtons.YesNo,
             MessageBoxIcon.Question,
             MessageBoxDefaultButton.Button1
         );
 
-        if (result is not DialogResult.Yes)
+        if (result is DialogResult.Yes)
         {
-            Environment.Exit(0);
+            Process.Start("https://github.com/molenzwiebel/Deceive#FAQ");
         }
 
-        var processInfo = new ProcessStartInfo(Assembly.GetEntryAssembly()!.Location)
-        {
-            Arguments = "--update-hosts=true",
-            UseShellExecute = true,
-            Verb = "runas" // ask for admin
-        };
-        // wait for the process to exit, so that we can check if the issue is fixed
-        var process = Process.Start(processInfo);
-        process?.WaitForExit();
-
-        if (DeceiveLocalhostResolves())
-            return;
-        
-        MessageBox.Show(
-            "Deceive was unable to fix your DNS resolution issue. Please try switching to a different DNS server (like Cloudflare's 1.1.1.1 or Google's " +
-            "8.8.8.8). If that doesn't work, please contact the creator through GitHub (https://github.com/molenzwiebel/Deceive) or Discord for further assistance.",
-            StartupHandler.DeceiveTitle,
-            MessageBoxButtons.OK,
-            MessageBoxIcon.Error,
-            MessageBoxDefaultButton.Button1
-        );
         Environment.Exit(0);
     }
 }
