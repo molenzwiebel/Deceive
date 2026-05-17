@@ -4,7 +4,7 @@
     <OutputType>WinExe</OutputType>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
-    <AssemblyVersion>1.17.1.0</AssemblyVersion>
+    <AssemblyVersion>1.17.2.0</AssemblyVersion>
     <ApplicationIcon>Resources\deceive.ico</ApplicationIcon>
     <LangVersion>default</LangVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
