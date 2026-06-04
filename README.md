@@ -3,7 +3,7 @@
 [![Discord](https://discordapp.com/api/guilds/249481856687407104/widget.png?style=shield)](https://discord.gg/bfxdsRC)
 
 > [!CAUTION]
-> The `deceive.gg` website is **UNRELATED** to this project and does not represent this project. Downloading anything from that site is **NOT SAFE**. If you are subscribing to their fake Patreon, you are **BEING SCAMMED**. I do not accept donations and do not run a Patreon project.
+> The `deceive.app` website is **UNRELATED** to this project and does not represent this project. **THE DOWNLOAD ON THAT SITE CONTAINS MALWARE**. If you downloaded anything from `deceive.app`, reinstall your PC.
 
 # :tophat: Deceive
 
