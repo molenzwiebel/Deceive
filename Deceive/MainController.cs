@@ -36,7 +36,7 @@ internal class MainController : ApplicationContext
     public string Status { get; set; } = null!;
     private string StatusFile { get; } = Path.Combine(Persistence.DataDir, "status");
     public bool ConnectToMuc { get; set; } = true;
-    private bool SentIntroductionText { get; set; } = false;
+    private bool SentIntroductionText { get; set; } = Persistence.GetHasShownIntroduction();
     private CancellationTokenSource? ShutdownToken { get; set; } = null;
 
     private ToolStripMenuItem EnabledMenuItem { get; set; } = null!;
@@ -303,6 +303,7 @@ internal class MainController : ApplicationContext
 
     private async Task SendIntroductionTextAsync()
     {
+        Persistence.SetHasShownIntroduction();
         SentIntroductionText = true;
         await SendMessageFromFakePlayerAsync("Welcome! Deceive is running and you are currently appearing " + Status +
                                              ". Despite what the game client may indicate, you are appearing offline to your friends unless you manually disable Deceive.");
