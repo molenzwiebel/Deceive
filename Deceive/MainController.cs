@@ -107,7 +107,7 @@ internal class MainController : ApplicationContext
                 };
                 Connections.Add(proxiedConnection);
 
-                if (!SentIntroductionText)
+                if (!SentIntroductionText && !Persistence.GetHasShownIntroduction())
                 {
                     SentIntroductionText = true;
                     _ = Task.Run(async () =>
@@ -303,7 +303,7 @@ internal class MainController : ApplicationContext
 
     private async Task SendIntroductionTextAsync()
     {
-        SentIntroductionText = true;
+        Persistence.SetHasShownIntroduction();
         await SendMessageFromFakePlayerAsync("Welcome! Deceive is running and you are currently appearing " + Status +
                                              ". Despite what the game client may indicate, you are appearing offline to your friends unless you manually disable Deceive.");
         await Task.Delay(200);

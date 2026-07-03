@@ -12,6 +12,7 @@ internal static class Persistence
     private static readonly string DefaultLaunchGamePath = Path.Combine(DataDir, "launchGame");
     private static readonly string CachedCertPath = Path.Combine(DataDir, "localhostCert.pfx");
     private static readonly string StartupStatusPath = Path.Combine(DataDir, "startupStatus");
+    private static readonly string IntroductionShownPath = Path.Combine(DataDir, "introductionShown");
 
     static Persistence()
     {
@@ -62,4 +63,8 @@ internal static class Persistence
     // Startup status: "chat", "offline", "mobile", or "last" (remember last session).
     internal static string GetStartupStatus() => File.Exists(StartupStatusPath) ? File.ReadAllText(StartupStatusPath) : "last";
     internal static void SetStartupStatus(string status) => File.WriteAllText(StartupStatusPath, status);
+
+    // Whether the introduction/welcome text has already been shown to the user.
+    internal static bool GetHasShownIntroduction() => File.Exists(IntroductionShownPath);
+    internal static void SetHasShownIntroduction() => File.WriteAllText(IntroductionShownPath, string.Empty);
 }
