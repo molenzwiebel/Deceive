@@ -191,7 +191,7 @@ internal class ProxiedConnection
                 presence.Element("games")?.Element("keystone")?.Remove();
                 presence.Element("games")?.Element("riot_client")?.Remove();
 
-                // Remove Teamfight Tactics presence (standalone TFT client)
+                // Remove Teamfight Tactics presence
                 presence.Element("games")?.Element("teamfighttactics")?.Remove();
 
                 // Extracts current VALORANT from the user's own presence, so that we can show a fake
