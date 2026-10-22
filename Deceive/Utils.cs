@@ -36,7 +36,7 @@ internal static class Utils
     {
         try
         {
-            var httpClient = new HttpClient();
+            var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
             httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Deceive", DeceiveVersion));
 
             var response =
@@ -177,7 +177,7 @@ internal static class Utils
         try
         {
             Trace.WriteLine("Cached certificate is missing or expiring soon, downloading new certificate.");
-            var httpClient = new HttpClient();
+            var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
             httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Deceive", DeceiveVersion));
 
             var response = await httpClient.GetAsync("https://mln.cx/deceive/localhost.pfx");
@@ -195,11 +195,18 @@ internal static class Utils
         }
     }
 
-    private static bool DeceiveLocalhostResolves()
+    private static async Task<bool> DeceiveLocalhostResolvesAsync()
     {
         try
         {
-            var addresses = System.Net.Dns.GetHostAddresses(ConfigProxy.LocalhostDomain);
+            // A DNS server that's unreachable rather than merely absent can take a long time to
+            // time out on its own, so bound the wait ourselves instead of blocking startup on it.
+            var lookupTask = System.Net.Dns.GetHostAddressesAsync(ConfigProxy.LocalhostDomain);
+            var completed = await Task.WhenAny(lookupTask, Task.Delay(TimeSpan.FromSeconds(5)));
+            if (completed != lookupTask)
+                return false;
+
+            var addresses = await lookupTask;
             if (addresses.Any(addr => addr.ToString() == "127.0.0.1"))
                 return true;
         }
@@ -212,9 +219,9 @@ internal static class Utils
 
     // Check if deceive-localhost.molenzwiebel.xyz is resolving to 127.0.0.1, and offer
     // the user to relaunch to install the necessary hosts file entry if not.
-    public static void EnsureLocalhostResolution()
+    public static async Task EnsureLocalhostResolutionAsync()
     {
-        if (DeceiveLocalhostResolves())
+        if (await DeceiveLocalhostResolvesAsync())
             return;
 
         var result = MessageBox.Show(

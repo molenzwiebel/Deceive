@@ -84,7 +84,7 @@ internal static class StartupHandler
         }
 
         // if we can't resolve deceive-localhost.molenzwiebel.xyz to 127.0.0.1, boom
-        Utils.EnsureLocalhostResolution();
+        await Utils.EnsureLocalhostResolutionAsync();
 
         // Step 0: Check for updates in the background.
         _ = Utils.CheckForUpdatesAsync();
@@ -127,6 +127,11 @@ internal static class StartupHandler
         // If we don't have a concrete game by now, the user has cancelled and nothing we can do.
         if (game is LaunchGame.Prompt or LaunchGame.Auto)
             return;
+
+        // Show the tray icon now. Fetching the MITM certificate and launching the Riot Client
+        // below can take a few seconds with nothing else on screen, so get some feedback up
+        // as early as we reasonably can instead of leaving the user staring at nothing.
+        var mainController = new MainController();
 
         var launchProduct = game switch
         {
@@ -178,8 +183,6 @@ internal static class StartupHandler
         {
             ListenToRiotClientExit(riotClient);
         }
-
-        var mainController = new MainController();
 
         // Step 6: Get chat server and port for this player by listening to event from ConfigProxy.
         var servingClients = false;

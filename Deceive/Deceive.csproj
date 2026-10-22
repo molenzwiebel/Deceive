@@ -12,6 +12,8 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Resources\deceive.ico" />
+    <!-- Game artwork for the launch picker, loaded at runtime by Deceive.UI.Theme. -->
+    <EmbeddedResource Include="Resources\games\*.png" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Costura.Fody" Version="5.7.0">
