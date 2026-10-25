@@ -60,12 +60,12 @@ internal static class StartupHandler
                 "The Riot Client is currently running. In order to mask your online status, the Riot Client needs to be started by Deceive. " +
                 "Do you want Deceive to stop the Riot Client and games launched by it, so that it can restart with the proper configuration?",
                 DeceiveTitle,
-                MessageBoxButtons.YesNo,
+                MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Question,
                 MessageBoxDefaultButton.Button1
             );
 
-            if (result is not DialogResult.Yes)
+            if (result is not DialogResult.OK)
                 return;
             Utils.KillProcesses();
             await Task.Delay(2000); // Riot Client takes a while to die

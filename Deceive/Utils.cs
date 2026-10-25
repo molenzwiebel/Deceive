@@ -220,12 +220,12 @@ internal static class Utils
         var result = MessageBox.Show(
             "Your machine is failing to resolve some required domains. You will need to switch DNS servers or add an entry to your hosts file. Please see the Deceive FAQ for more information. Deceive will not work until this issue is resolved. Would you like to open the FAQ now?",
             StartupHandler.DeceiveTitle,
-            MessageBoxButtons.YesNo,
+            MessageBoxButtons.OKCancel,
             MessageBoxIcon.Question,
             MessageBoxDefaultButton.Button1
         );
 
-        if (result is DialogResult.Yes)
+        if (result is DialogResult.OK)
         {
             Process.Start("https://github.com/molenzwiebel/Deceive#FAQ");
         }
