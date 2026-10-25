@@ -206,12 +206,12 @@ internal class MainController : ApplicationContext
             var result = MessageBox.Show(
                 "Restart Deceive to launch a different game? This will also stop related games if they are running.",
                 StartupHandler.DeceiveTitle,
-                MessageBoxButtons.YesNo,
+                MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Question,
                 MessageBoxDefaultButton.Button1
             );
 
-            if (result is not DialogResult.Yes)
+            if (result is not DialogResult.OK)
                 return;
 
             Utils.KillProcesses();
@@ -227,12 +227,12 @@ internal class MainController : ApplicationContext
             var result = MessageBox.Show(
                 "Are you sure you want to stop Deceive? This will also stop related games if they are running.",
                 StartupHandler.DeceiveTitle,
-                MessageBoxButtons.YesNo,
+                MessageBoxButtons.OKCancel,
                 MessageBoxIcon.Question,
                 MessageBoxDefaultButton.Button1
             );
 
-            if (result is not DialogResult.Yes)
+            if (result is not DialogResult.OK)
                 return;
 
             Utils.KillProcesses();
