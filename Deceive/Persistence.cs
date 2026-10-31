@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 
@@ -13,6 +13,7 @@ internal static class Persistence
     private static readonly string CachedCertPath = Path.Combine(DataDir, "localhostCert.pfx");
     private static readonly string StartupStatusPath = Path.Combine(DataDir, "startupStatus");
     private static readonly string IntroductionShownPath = Path.Combine(DataDir, "introductionShown");
+    private static readonly string LogTrafficPath = Path.Combine(DataDir, "logTraffic");
 
     static Persistence()
     {
@@ -49,7 +50,7 @@ internal static class Persistence
         try
         {
             var contents = File.ReadAllBytes(CachedCertPath);
-            return new X509Certificate2(contents);
+            return X509CertificateLoader.LoadPkcs12(contents, null);
         }
         catch
         {
@@ -67,4 +68,15 @@ internal static class Persistence
     // Whether the introduction/welcome text has already been shown to the user.
     internal static bool GetHasShownIntroduction() => File.Exists(IntroductionShownPath);
     internal static void SetHasShownIntroduction() => File.WriteAllText(IntroductionShownPath, string.Empty);
+
+    // Whether full chat/config traffic is written to debug.log. Off unless the user opts in.
+    internal static bool GetLogTraffic() => File.Exists(LogTrafficPath);
+
+    internal static void SetLogTraffic(bool enabled)
+    {
+        if (enabled)
+            File.WriteAllText(LogTrafficPath, string.Empty);
+        else
+            File.Delete(LogTrafficPath);
+    }
 }

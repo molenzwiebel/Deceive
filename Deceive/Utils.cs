@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -8,10 +8,8 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace Deceive;
 
@@ -42,7 +40,7 @@ internal static class Utils
             var response =
                 await httpClient.GetAsync("https://api.github.com/repos/molenzwiebel/Deceive/releases/latest");
             var content = await response.Content.ReadAsStringAsync();
-            var release = JsonSerializer.Deserialize<JsonNode>(content);
+            var release = JsonNode.Parse(content);
             var latestVersion = release?["tag_name"]?.ToString();
 
             // If failed to fetch or already latest or newer, return.
@@ -76,13 +74,16 @@ internal static class Utils
 
             if (result is DialogResult.OK)
                 // Open the url in the browser.
-                Process.Start(release?["html_url"]?.ToString()!);
+                OpenUrl(release?["html_url"]?.ToString()!);
         }
         catch
         {
             // Ignored.
         }
     }
+
+    // Opens a URL in the default browser. Unlike .NET Framework, .NET requires UseShellExecute for this.
+    internal static void OpenUrl(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
     private static IEnumerable<Process> GetProcesses()
     {
@@ -132,7 +133,7 @@ internal static class Utils
                 Environment.Exit(0);
             }
 
-            throw ex;
+            throw;
         }
     }
 
@@ -151,7 +152,7 @@ internal static class Utils
             // occasionally this deserialization may error, because the RC occasionally corrupts its own
             // configuration file (wtf riot?). we will return null in that case, which will cause a prompt
             // telling the user to launch a game normally once
-            var data = JsonSerializer.Deserialize<JsonNode>(File.ReadAllText(installPath));
+            var data = JsonNode.Parse(File.ReadAllText(installPath));
             var rcPaths = new List<string?>
                 { data?["rc_default"]?.ToString(), data?["rc_live"]?.ToString(), data?["rc_beta"]?.ToString() };
 
@@ -183,7 +184,7 @@ internal static class Utils
             var response = await httpClient.GetAsync("https://mln.cx/deceive/localhost.pfx");
             response.EnsureSuccessStatusCode();
             var certBytes = await response.Content.ReadAsByteArrayAsync();
-            var cert = new X509Certificate2(certBytes);
+            var cert = X509CertificateLoader.LoadPkcs12(certBytes, null);
             Persistence.SetCachedCertificate(certBytes);
             return cert;
         }
@@ -227,7 +228,7 @@ internal static class Utils
 
         if (result is DialogResult.OK)
         {
-            Process.Start("https://github.com/molenzwiebel/Deceive#FAQ");
+            OpenUrl("https://github.com/molenzwiebel/Deceive#FAQ");
         }
 
         Environment.Exit(0);

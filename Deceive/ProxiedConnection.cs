@@ -3,8 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Security;
 using System.Text;
-using System.Text.Json;
+using System.Linq;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 using System.Xml.Linq;
@@ -15,9 +16,26 @@ internal class ProxiedConnection
 {
     private MainController MainController { get; set; }
 
+    private const string RosterQuery = "<query xmlns='jabber:iq:riotgames:roster'>";
+    private static ReadOnlySpan<byte> RosterQueryUtf8 => "<query xmlns='jabber:iq:riotgames:roster'>"u8;
+    private static ReadOnlySpan<byte> FakePlayerJidUtf8 => "41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net"u8;
+
+    private const string FakePlayerRosterItem =
+        "<item jid='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' name='&#9;Deceive Active!' subscription='both' puuid='41c322a1-b328-495b-a004-5ccd3e45eae8'>" +
+        "<group priority='9999'>Deceive</group>" +
+        "<state>online</state>" +
+        "<id name='&#9;Deceive Active!' tagline='...'/>" +
+        "<lol name='&#9;Deceive Active!'/>" +
+        "<platforms><riot name='&#9;Deceive Active' tagline='...'/></platforms>" +
+        "</item>";
+
     private SslStream Incoming { get; set; } = null!;
     private SslStream Outgoing { get; set; } = null!;
-    private bool Connected { get; set; } = true;
+    private SemaphoreSlim IncomingWriteLock { get; } = new(1, 1);
+    private SemaphoreSlim OutgoingWriteLock { get; } = new(1, 1);
+    private volatile bool _connected = true;
+    private int _closed;
+    private bool Connected => _connected;
     private string LastPresence { get; set; } = null!; // we resend this if the state changes
     private bool InsertedFakePlayer { get; set; } = false;
     private bool SentFakePlayerPresence { get; set; } = false;
@@ -38,47 +56,53 @@ internal class ProxiedConnection
         Task.Run(OutgoingLoopAsync);
     }
 
+    // RC -> server. Rewrites our presence and intercepts messages to the fake Deceive player.
     private async Task IncomingLoopAsync()
     {
         try
         {
-            int byteCount;
-            var bytes = new byte[8192 * 2];
-
-            do
+            var reader = new XmppStanzaReader(Incoming);
+            var passthrough = new PassthroughBatch();
+            while (Connected && await reader.FillAsync())
             {
-                byteCount = await Incoming.ReadAsync(bytes, 0, bytes.Length);
-
-                var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
-
-                // If this is possibly a presence stanza, rewrite it.
-                if (content.Contains("<presence") && MainController.Enabled)
+                while (reader.TryReadUnit(out var unit))
                 {
-                    Trace.WriteLine("<!--RC TO SERVER ORIGINAL-->" + content);
-                    await PossiblyRewriteAndResendPresenceAsync(content, MainController.Status);
+                    // If this is a presence stanza, rewrite it.
+                    if (unit.IsElement("presence"u8) && MainController.Enabled)
+                    {
+                        await FlushToServerAsync(passthrough);
+                        var content = Encoding.UTF8.GetString(unit.Span);
+                        TrafficLog.Write("<!--RC TO SERVER ORIGINAL-->", content);
+                        await PossiblyRewriteAndResendPresenceAsync(content, MainController.Status);
+                    }
+                    else if (unit.Contains(FakePlayerJidUtf8))
+                    {
+                        // Don't send anything involving our fake user to chat servers.
+                        await FlushToServerAsync(passthrough);
+                        var content = Encoding.UTF8.GetString(unit.Span);
+                        TrafficLog.Write("<!--RC TO SERVER REMOVED-->", content);
+                        await MainController.HandleChatMessage(content);
+                    }
+                    else
+                    {
+                        passthrough.Add(unit);
+                    }
                 }
-                else if (content.Contains("41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net"))
-                {
-                    await MainController.HandleChatMessage(content);
 
-                    //Don't send anything involving our fake user to chat servers
-                    Trace.WriteLine("<!--RC TO SERVER REMOVED-->" + content);
-                }
-                else
-                {
-                    await Outgoing.WriteAsync(bytes, 0, byteCount);
-                    // don't log anything that contains a JWT
-                    if (!content.Contains("token>")) Trace.WriteLine("<!--RC TO SERVER-->" + content);
-                }
+                // Must be flushed before the next FillAsync, which reuses the reader's buffer.
+                await FlushToServerAsync(passthrough);
 
                 if (InsertedFakePlayer && !SentFakePlayerPresence)
                     await SendFakePlayerPresenceAsync();
-            } while (byteCount != 0 && Connected);
+            }
         }
         catch (Exception e)
         {
-            Trace.WriteLine("Incoming errored.");
-            Trace.WriteLine(e);
+            if (Connected)
+            {
+                Trace.WriteLine("Incoming errored.");
+                Trace.WriteLine(e);
+            }
         }
         finally
         {
@@ -87,47 +111,46 @@ internal class ProxiedConnection
         }
     }
 
+    // Server -> RC. Inserts the fake Deceive player into the roster.
     private async Task OutgoingLoopAsync()
     {
         try
         {
-            int byteCount;
-            var bytes = new byte[8192 * 2];
-
-            do
+            var reader = new XmppStanzaReader(Outgoing);
+            var passthrough = new PassthroughBatch();
+            while (Connected && await reader.FillAsync())
             {
-                byteCount = await Outgoing.ReadAsync(bytes, 0, bytes.Length);
-                var content = Encoding.UTF8.GetString(bytes, 0, byteCount);
+                while (reader.TryReadUnit(out var unit))
+                {
+                    if (!InsertedFakePlayer && unit.Contains(RosterQueryUtf8))
+                    {
+                        await FlushToClientAsync(passthrough);
+                        InsertedFakePlayer = true;
 
-                // Insert fake player into roster
-                const string roster = "<query xmlns='jabber:iq:riotgames:roster'>";
-                if (!InsertedFakePlayer && content.Contains(roster))
-                {
-                    InsertedFakePlayer = true;
-                    Trace.WriteLine("<!--SERVER TO RC ORIGINAL-->" + content);
-                    content = content.Insert(content.IndexOf(roster, StringComparison.Ordinal) + roster.Length,
-                        "<item jid='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net' name='&#9;Deceive Active!' subscription='both' puuid='41c322a1-b328-495b-a004-5ccd3e45eae8'>" +
-                        "<group priority='9999'>Deceive</group>" +
-                        "<state>online</state>" +
-                        "<id name='&#9;Deceive Active!' tagline='...'/>" +
-                        "<lol name='&#9;Deceive Active!'/>" +
-                        "<platforms><riot name='&#9;Deceive Active' tagline='...'/></platforms>" +
-                        "</item>");
-                    var contentBytes = Encoding.UTF8.GetBytes(content);
-                    await Incoming.WriteAsync(contentBytes, 0, contentBytes.Length);
-                    Trace.WriteLine("<!--DECEIVE TO RC-->" + content);
+                        // The unit is a complete stanza, so decoding it can never split a multibyte character.
+                        var content = Encoding.UTF8.GetString(unit.Span);
+                        TrafficLog.Write("<!--SERVER TO RC ORIGINAL-->", content);
+                        content = content.Insert(content.IndexOf(RosterQuery, StringComparison.Ordinal) + RosterQuery.Length, FakePlayerRosterItem);
+                        await WriteToClientAsync(Encoding.UTF8.GetBytes(content));
+                        TrafficLog.Write("<!--DECEIVE TO RC-->", content);
+                    }
+                    else
+                    {
+                        passthrough.Add(unit);
+                    }
                 }
-                else
-                {
-                    await Incoming.WriteAsync(bytes, 0, byteCount);
-                    Trace.WriteLine("<!--SERVER TO RC-->" + content);
-                }
-            } while (byteCount != 0 && Connected);
+
+                // Must be flushed before the next FillAsync, which reuses the reader's buffer.
+                await FlushToClientAsync(passthrough);
+            }
         }
         catch (Exception e)
         {
-            Trace.WriteLine("Outgoing errored.");
-            Trace.WriteLine(e);
+            if (Connected)
+            {
+                Trace.WriteLine("Outgoing errored.");
+                Trace.WriteLine(e);
+            }
         }
         finally
         {
@@ -136,11 +159,96 @@ internal class ProxiedConnection
         }
     }
 
+    private async ValueTask FlushToServerAsync(PassthroughBatch batch)
+    {
+        if (batch.IsEmpty)
+            return;
+
+        var bytes = batch.Take();
+        await WriteToServerAsync(bytes);
+
+        if (TrafficLog.Enabled)
+        {
+            var content = Encoding.UTF8.GetString(bytes.Span);
+            // don't log anything that contains a JWT
+            if (!content.Contains("token>")) TrafficLog.Write("<!--RC TO SERVER-->", content);
+        }
+    }
+
+    private async ValueTask FlushToClientAsync(PassthroughBatch batch)
+    {
+        if (batch.IsEmpty)
+            return;
+
+        var bytes = batch.Take();
+        await WriteToClientAsync(bytes);
+        if (TrafficLog.Enabled)
+            TrafficLog.Write("<!--SERVER TO RC-->", Encoding.UTF8.GetString(bytes.Span));
+    }
+
+    // SslStream does not support concurrent writes, and both the proxy loops and the tray/chat commands
+    // write to the same streams, so every write goes through a per-direction lock.
+    private async ValueTask WriteToServerAsync(ReadOnlyMemory<byte> bytes)
+    {
+        await OutgoingWriteLock.WaitAsync();
+        try
+        {
+            await Outgoing.WriteAsync(bytes);
+        }
+        finally
+        {
+            OutgoingWriteLock.Release();
+        }
+    }
+
+    private async ValueTask WriteToClientAsync(ReadOnlyMemory<byte> bytes)
+    {
+        await IncomingWriteLock.WaitAsync();
+        try
+        {
+            await Incoming.WriteAsync(bytes);
+        }
+        finally
+        {
+            IncomingWriteLock.Release();
+        }
+    }
+
+    /// Tracks a run of consecutive pass-through units so they are forwarded in a single write, straight from the
+    /// reader's buffer. Units returned by the reader are contiguous, so a run is just a start and an end offset.
+    private sealed class PassthroughBatch
+    {
+        private byte[]? _buffer;
+        private int _start;
+        private int _end;
+
+        internal bool IsEmpty => _buffer is null;
+
+        internal void Add(XmppUnit unit)
+        {
+            if (_buffer is null || _buffer != unit.Buffer || _end != unit.Offset)
+            {
+                // Callers flush before anything non-contiguous, so this only starts a new run.
+                Debug.Assert(_buffer is null, "Pass-through units must be contiguous.");
+                _buffer = unit.Buffer;
+                _start = unit.Offset;
+            }
+
+            _end = unit.Offset + unit.Length;
+        }
+
+        internal ReadOnlyMemory<byte> Take()
+        {
+            var memory = _buffer.AsMemory(_start, _end - _start);
+            _buffer = null;
+            return memory;
+        }
+    }
+
     private async Task PossiblyRewriteAndResendPresenceAsync(string content, string targetStatus)
     {
         try
         {
-            LastPresence = content;
             var wrappedContent = "<xml>" + content + "</xml>";
             var xml = XDocument.Load(new StringReader(wrappedContent));
 
@@ -149,7 +257,14 @@ internal class ProxiedConnection
             if (xml.Root.HasElements is false)
                 return;
 
-            foreach (var presence in xml.Root.Elements())
+            // Remember our broadcast presence so it can be re-sent when the status changes. Directed presences
+            // (e.g. to a lobby chat room) must not overwrite it, or status changes would only reach that room.
+            if (xml.Root.Elements("presence").Any(p => p.Attribute("to") is null))
+                LastPresence = content;
+
+            // Snapshot the elements: removing one while enumerating Elements() would end the loop early
+            // and forward any later presences in this batch unmodified.
+            foreach (var presence in xml.Root.Elements().ToList())
             {
                 if (presence.Name != "presence")
                     continue;
@@ -158,6 +273,7 @@ internal class ProxiedConnection
                     if (MainController.ConnectToMuc)
                         continue;
                     presence.Remove();
+                    continue;
                 }
 
                 if (targetStatus != "chat" ||
@@ -206,7 +322,7 @@ internal class ProxiedConnection
                     if (!string.IsNullOrWhiteSpace(valorantBase64))
                     {
                         var valorantPresence = Encoding.UTF8.GetString(Convert.FromBase64String(valorantBase64));
-                        var valorantJson = JsonSerializer.Deserialize<JsonNode>(valorantPresence);
+                        var valorantJson = JsonNode.Parse(valorantPresence);
                         ValorantVersion = valorantJson?["partyPresenceData"]?["partyClientVersion"]?.GetValue<string>();
                         Trace.WriteLine("Found VALORANT version: " + ValorantVersion);
                         // only resend
@@ -222,8 +338,7 @@ internal class ProxiedConnection
             var sb = new StringBuilder();
             var xws = new XmlWriterSettings
             {
-                OmitXmlDeclaration = true, Encoding = Encoding.UTF8, ConformanceLevel = ConformanceLevel.Fragment,
-                Async = true
+                OmitXmlDeclaration = true, Encoding = Encoding.UTF8, ConformanceLevel = ConformanceLevel.Fragment
             };
             using (var xw = XmlWriter.Create(sb, xws))
             {
@@ -232,8 +347,9 @@ internal class ProxiedConnection
             }
 
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());
-            await Outgoing.WriteAsync(bytes, 0, bytes.Length);
-            Trace.WriteLine("<!--DECEIVE TO SERVER-->" + sb);
+            if (bytes.Length > 0)
+                await WriteToServerAsync(bytes);
+            TrafficLog.Write("<!--DECEIVE TO SERVER-->", sb.ToString());
         }
         catch (Exception e)
         {
@@ -332,8 +448,8 @@ internal class ProxiedConnection
             "</presence>";
 
         var bytes = Encoding.UTF8.GetBytes(presenceMessage);
-        await Incoming.WriteAsync(bytes, 0, bytes.Length);
-        Trace.WriteLine("<!--DECEIVE TO RC-->" + presenceMessage);
+        await WriteToClientAsync(bytes);
+        TrafficLog.Write("<!--DECEIVE TO RC-->", presenceMessage);
     }
 
     public async Task SendMessageFromFakePlayerAsync(string message)
@@ -347,8 +463,8 @@ internal class ProxiedConnection
             $"<message from='41c322a1-b328-495b-a004-5ccd3e45eae8@eu1.pvp.net/RC-Deceive' stamp='{stamp}' id='fake-{stamp}' type='chat'><body>{message}</body></message>";
 
         var bytes = Encoding.UTF8.GetBytes(chatMessage);
-        await Incoming.WriteAsync(bytes, 0, bytes.Length);
-        Trace.WriteLine("<!--DECEIVE TO RC-->" + chatMessage);
+        await WriteToClientAsync(bytes);
+        TrafficLog.Write("<!--DECEIVE TO RC-->", chatMessage);
     }
 
     public async Task UpdateStatusAsync(string newStatus)
@@ -359,9 +475,32 @@ internal class ProxiedConnection
         await PossiblyRewriteAndResendPresenceAsync(LastPresence, newStatus);
     }
 
+    // Called by both loops when they end. Closes both sides exactly once: disposing the streams unblocks
+    // the other loop's pending read, and makes sure we never keep a half-dead connection to the chat server open.
     private void OnConnectionErrored()
     {
-        Connected = false;
+        if (Interlocked.Exchange(ref _closed, 1) != 0)
+            return;
+
+        _connected = false;
+        try
+        {
+            Incoming.Dispose();
+        }
+        catch (Exception e)
+        {
+            Trace.WriteLine(e);
+        }
+
+        try
+        {
+            Outgoing.Dispose();
+        }
+        catch (Exception e)
+        {
+            Trace.WriteLine(e);
+        }
+
         ConnectionErrored?.Invoke(this, EventArgs.Empty);
     }
 }

@@ -4,7 +4,6 @@ using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-using System.Windows.Forms;
 
 namespace Deceive;
 
@@ -12,27 +11,33 @@ internal static class StartupHandler
 {
     public static string DeceiveTitle => "Deceive " + Utils.DeceiveVersion;
 
-    // Arguments are parsed through System.CommandLine.DragonFruit.
-    /// <param name="args">The game to be launched, or automatically determined if not passed.</param>
-    /// <param name="gamePatchline">The patchline to be used for launching the game.</param>
-    /// <param name="riotClientParams">Any extra parameters to be passed to the Riot Client.</param>
-    /// <param name="gameParams">Any extra parameters to be passed to the launched game.</param>
+    // See CommandLineOptions for the accepted arguments.
     [STAThread]
-    public static async Task Main(LaunchGame args = LaunchGame.Auto, string gamePatchline = "live", string? riotClientParams = null, string? gameParams = null)
+    public static int Main(string[] argv)
     {
         AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
-        Application.EnableVisualStyles();
         Trace.Listeners.Add(new ConsoleTraceListener());
-        
+
+        if (!CommandLineOptions.TryParse(argv, out var options, out var error))
+        {
+            MessageBox.Show((error is null ? "" : error + "\n\n") + CommandLineOptions.Usage, DeceiveTitle, MessageBoxButtons.OK,
+                error is null ? MessageBoxIcon.Information : MessageBoxIcon.Error);
+            return error is null ? 0 : 1;
+        }
+
         Trace.WriteLine($"{DeceiveTitle} starting with arguments:\n" +
-                        $"LaunchGame: {args}\n" +
-                        $"GamePatchline: {gamePatchline}\n" +
-                        $"RiotClientParams: {riotClientParams}\n" +
-                        $"GameParams: {gameParams}");
+                        $"LaunchGame: {options.Game}\n" +
+                        $"GamePatchline: {options.GamePatchline}\n" +
+                        $"RiotClientParams: {options.RiotClientParams}\n" +
+                        $"GameParams: {options.GameParams}");
 
         try
         {
-            await StartDeceiveAsync(args, gamePatchline, riotClientParams, gameParams);
+            var mainController = StartDeceiveAsync(options.Game, options.GamePatchline, options.RiotClientParams, options.GameParams)
+                .GetAwaiter().GetResult();
+
+            // Loop infinitely and handle window messages/tray icon, on the main thread.
+            mainController?.Run();
         }
         catch (Exception ex)
         {
@@ -47,10 +52,12 @@ internal static class StartupHandler
                 MessageBoxDefaultButton.Button1
             );
         }
+
+        return 0;
     }
 
     /// Actual main function. Wrapped into a separate function so we can catch exceptions.
-    private static async Task StartDeceiveAsync(LaunchGame game, string gamePatchline, string? riotClientParams, string? gameParams)
+    private static async Task<MainController?> StartDeceiveAsync(LaunchGame game, string gamePatchline, string? riotClientParams, string? gameParams)
     {
         // Refuse to do anything if the client is already running, unless we're specifically
         // allowing that through League/RC's --allow-multiple-clients.
@@ -66,7 +73,7 @@ internal static class StartupHandler
             );
 
             if (result is not DialogResult.OK)
-                return;
+                return null;
             Utils.KillProcesses();
             await Task.Delay(2000); // Riot Client takes a while to die
         }
@@ -77,6 +84,7 @@ internal static class StartupHandler
             Trace.Listeners.Add(new TextWriterTraceListener(Path.Combine(Persistence.DataDir, "debug.log")));
             Debug.AutoFlush = true;
             Trace.WriteLine(DeceiveTitle);
+            Trace.WriteLine($"Chat traffic logging: {(TrafficLog.Enabled ? "on" : "off")}");
         }
         catch
         {
@@ -110,7 +118,7 @@ internal static class StartupHandler
                 MessageBoxDefaultButton.Button1
             );
 
-            return;
+            return null;
         }
 
         // If launching "auto", use the persisted launch game (which defaults to prompt).
@@ -120,13 +128,12 @@ internal static class StartupHandler
         // If prompt, display dialog.
         if (game is LaunchGame.Prompt)
         {
-            new GamePromptForm().ShowDialog();
-            game = GamePromptForm.SelectedGame;
+            game = GamePrompt.Show();
         }
 
         // If we don't have a concrete game by now, the user has cancelled and nothing we can do.
         if (game is LaunchGame.Prompt or LaunchGame.Auto)
-            return;
+            return null;
 
         var launchProduct = game switch
         {
@@ -156,7 +163,7 @@ internal static class StartupHandler
                 MessageBoxDefaultButton.Button1
             );
 
-            return;
+            return null;
         }
 
         // Step 5: Launch Riot Client (+game)
@@ -197,8 +204,7 @@ internal static class StartupHandler
             }
         };
 
-        // Loop infinitely and handle window messages/tray icon.
-        Application.Run(mainController);
+        return mainController;
     }
 
     private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs e)

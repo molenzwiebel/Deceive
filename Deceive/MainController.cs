@@ -7,44 +7,41 @@ using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Xml;
-using System.Xml.Linq;
-using Deceive.Properties;
+using Deceive.Native;
 
 namespace Deceive;
 
-internal class MainController : ApplicationContext
+internal class MainController
 {
-    internal MainController()
-    {
-        TrayIcon = new NotifyIcon
-        {
-            Icon = Resources.DeceiveIcon,
-            Visible = true,
-            BalloonTipTitle = StartupHandler.DeceiveTitle,
-            BalloonTipText = "Deceive is currently masking your status. Right-click the tray icon for more options."
-        };
-        TrayIcon.ShowBalloonTip(5000);
+    internal MainController() => LoadStatus();
 
-        LoadStatus();
-        UpdateTray();
-    }
-
-    private NotifyIcon TrayIcon { get; }
+    private TrayIcon? TrayIcon { get; set; }
     public bool Enabled { get; set; } = true;
     public string Status { get; set; } = null!;
     private string StatusFile { get; } = Path.Combine(Persistence.DataDir, "status");
     public bool ConnectToMuc { get; set; } = true;
     private bool SentIntroductionText { get; set; } = false;
-    private CancellationTokenSource? ShutdownToken { get; set; } = null;
+    private CancellationTokenSource? _shutdownToken;
 
-    private ToolStripMenuItem EnabledMenuItem { get; set; } = null!;
-    private ToolStripMenuItem ChatStatus { get; set; } = null!;
-    private ToolStripMenuItem OfflineStatus { get; set; } = null!;
-    private ToolStripMenuItem MobileStatus { get; set; } = null!;
+    /// Shows the tray icon and runs the message loop on the calling thread until the user quits.
+    internal void Run()
+    {
+        TrayIcon = new TrayIcon(StartupHandler.DeceiveTitle, BuildTrayMenu);
+        TrayIcon.ShowBalloonTip(StartupHandler.DeceiveTitle,
+            "Deceive is currently masking your status. Right-click the tray icon for more options.", 5000);
+        NativeWindow.RunMessageLoop();
+    }
 
+    private static readonly TimeSpan HandshakeTimeout = TimeSpan.FromSeconds(30);
+
+    // Touched from the accept loop, connection error handlers, and tray/chat commands; always lock.
     private List<ProxiedConnection> Connections { get; } = new();
+
+    private ProxiedConnection[] ConnectionsSnapshot()
+    {
+        lock (Connections)
+            return Connections.ToArray();
+    }
 
     public void StartServingClients(TcpListener server, X509Certificate2 serverCert, string chatHost, int chatPort)
     {
@@ -57,245 +54,273 @@ internal class MainController : ApplicationContext
         {
             try
             {
-                // no need to shutdown, we received a new request
-                ShutdownToken?.Cancel();
-                ShutdownToken = null;
-
                 var incoming = await server.AcceptTcpClientAsync();
-                var sslIncoming = new SslStream(incoming.GetStream());
-                await sslIncoming.AuthenticateAsServerAsync(serverCert);
 
-                TcpClient outgoing;
-                while (true)
-                {
-                    try
-                    {
-                        outgoing = new TcpClient(chatHost, chatPort);
-                        break;
-                    }
-                    catch (SocketException e)
-                    {
-                        Trace.WriteLine(e);
-                        var result = MessageBox.Show(
-                            "Unable to connect to the chat server. Please check your internet connection. " +
-                            "If this issue persists and you can connect to chat normally without Deceive, " +
-                            "please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
-                            StartupHandler.DeceiveTitle,
-                            MessageBoxButtons.RetryCancel,
-                            MessageBoxIcon.Error,
-                            MessageBoxDefaultButton.Button1
-                        );
-                        if (result == DialogResult.Cancel)
-                            Environment.Exit(0);
-                    }
-                }
+                // no need to shutdown, we received a new request
+                Interlocked.Exchange(ref _shutdownToken, null)?.Cancel();
 
-                var sslOutgoing = new SslStream(outgoing.GetStream());
-                await sslOutgoing.AuthenticateAsClientAsync(chatHost);
-
-                var proxiedConnection = new ProxiedConnection(this, sslIncoming, sslOutgoing);
-                proxiedConnection.Start();
-                proxiedConnection.ConnectionErrored += (_, _) =>
-                {
-                    Trace.WriteLine("Disconnected incoming connection.");
-                    Connections.Remove(proxiedConnection);
-
-                    if (Connections.Count == 0)
-                    {
-                        Task.Run(ShutdownIfNoReconnect);
-                    }
-                };
-                Connections.Add(proxiedConnection);
-
-                if (!SentIntroductionText && !Persistence.GetHasShownIntroduction())
-                {
-                    SentIntroductionText = true;
-                    _ = Task.Run(async () =>
-                    {
-                        await Task.Delay(10_000);
-                        await SendIntroductionTextAsync();
-                    });
-                }
-            } catch (Exception e)
+                // Handshakes run per connection, so one slow or stuck client can't block the others.
+                _ = Task.Run(() => HandleIncomingAsync(incoming, serverCert, chatHost, chatPort));
+            }
+            catch (Exception e)
             {
-                Trace.WriteLine("Failed to handle incoming connection.");
+                Trace.WriteLine("Failed to accept incoming connection.");
                 Trace.WriteLine(e);
             }
         }
     }
 
-    private void UpdateTray()
+    private async Task HandleIncomingAsync(TcpClient incoming, X509Certificate2 serverCert, string chatHost, int chatPort)
     {
-        var aboutMenuItem = new ToolStripMenuItem(StartupHandler.DeceiveTitle) { Enabled = false };
-
-        EnabledMenuItem = new ToolStripMenuItem("Enabled", null, async (_, _) =>
+        SslStream? sslIncoming = null;
+        SslStream? sslOutgoing = null;
+        try
         {
-            Enabled = !Enabled;
-            await UpdateStatusAsync(Enabled ? Status : "chat");
-            await SendMessageFromFakePlayerAsync(Enabled ? "Deceive is now enabled." : "Deceive is now disabled.");
-            UpdateTray();
-        })
-        { Checked = Enabled };
+            // Chat stanzas are small and latency-sensitive; don't let Nagle delay them.
+            incoming.NoDelay = true;
+            sslIncoming = new SslStream(incoming.GetStream());
+            using (var timeout = new CancellationTokenSource(HandshakeTimeout))
+                await sslIncoming.AuthenticateAsServerAsync(new SslServerAuthenticationOptions { ServerCertificate = serverCert }, timeout.Token);
 
-        var mucMenuItem = new ToolStripMenuItem("Enable lobby chat", null, (_, _) =>
+            var outgoing = await ConnectToChatServerAsync(chatHost, chatPort);
+            outgoing.NoDelay = true;
+            sslOutgoing = new SslStream(outgoing.GetStream());
+            using (var timeout = new CancellationTokenSource(HandshakeTimeout))
+                await sslOutgoing.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = chatHost }, timeout.Token);
+
+            var proxiedConnection = new ProxiedConnection(this, sslIncoming, sslOutgoing);
+            proxiedConnection.ConnectionErrored += (_, _) =>
+            {
+                Trace.WriteLine("Disconnected incoming connection.");
+                bool noConnectionsLeft;
+                lock (Connections)
+                {
+                    Connections.Remove(proxiedConnection);
+                    noConnectionsLeft = Connections.Count == 0;
+                }
+
+                if (noConnectionsLeft)
+                    _ = Task.Run(ShutdownIfNoReconnect);
+            };
+
+            lock (Connections)
+                Connections.Add(proxiedConnection);
+
+            // Subscribe before starting, so an immediate disconnect is never missed.
+            proxiedConnection.Start();
+
+            if (!SentIntroductionText && !Persistence.GetHasShownIntroduction())
+            {
+                SentIntroductionText = true;
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(10_000);
+                    await SendIntroductionTextAsync();
+                });
+            }
+        }
+        catch (Exception e)
         {
-            ConnectToMuc = !ConnectToMuc;
-            UpdateTray();
-        })
-        { Checked = ConnectToMuc };
+            Trace.WriteLine("Failed to handle incoming connection.");
+            Trace.WriteLine(e);
+            sslIncoming?.Dispose();
+            sslOutgoing?.Dispose();
+            incoming.Dispose();
+        }
+    }
 
-        ChatStatus = new ToolStripMenuItem("Online", null, async (_, _) =>
+    private static async Task<TcpClient> ConnectToChatServerAsync(string chatHost, int chatPort)
+    {
+        while (true)
         {
-            await UpdateStatusAsync(Status = "chat");
-            Enabled = true;
-            UpdateTray();
-        })
-        { Checked = Status.Equals("chat") };
+            var client = new TcpClient();
+            try
+            {
+                using var timeout = new CancellationTokenSource(HandshakeTimeout);
+                await client.ConnectAsync(chatHost, chatPort, timeout.Token);
+                return client;
+            }
+            catch (Exception e) when (e is SocketException or OperationCanceledException)
+            {
+                client.Dispose();
+                Trace.WriteLine(e);
+                var result = MessageBox.Show(
+                    "Unable to connect to the chat server. Please check your internet connection. " +
+                    "If this issue persists and you can connect to chat normally without Deceive, " +
+                    "please file a bug report through GitHub (https://github.com/molenzwiebel/Deceive) or Discord.",
+                    StartupHandler.DeceiveTitle,
+                    MessageBoxButtons.RetryCancel,
+                    MessageBoxIcon.Error,
+                    MessageBoxDefaultButton.Button1
+                );
+                if (result == DialogResult.Cancel)
+                    Environment.Exit(0);
+            }
+        }
+    }
 
-        OfflineStatus = new ToolStripMenuItem("Offline", null, async (_, _) =>
-        {
-            await UpdateStatusAsync(Status = "offline");
-            Enabled = true;
-            UpdateTray();
-        })
-        { Checked = Status.Equals("offline") };
-
-        MobileStatus = new ToolStripMenuItem("Mobile", null, async (_, _) =>
-        {
-            await UpdateStatusAsync(Status = "mobile");
-            Enabled = true;
-            UpdateTray();
-        })
-        { Checked = Status.Equals("mobile") };
-
-        var typeMenuItem = new ToolStripMenuItem("Status Type", null, ChatStatus, OfflineStatus, MobileStatus);
-        
+    private List<TrayMenuItem> BuildTrayMenu()
+    {
         var currentStartup = Persistence.GetStartupStatus();
-        var startupOnline = new ToolStripMenuItem("Online", null, (_, _) =>
+
+        var items = new List<TrayMenuItem>
         {
-            Persistence.SetStartupStatus("chat");
-            UpdateTray();
-        })
-        { Checked = currentStartup == "chat" };
-
-        var startupOffline = new ToolStripMenuItem("Offline", null, (_, _) =>
-        {
-            Persistence.SetStartupStatus("offline");
-            UpdateTray();
-        })
-        { Checked = currentStartup == "offline" };
-
-        var startupMobile = new ToolStripMenuItem("Mobile", null, (_, _) =>
-        {
-            Persistence.SetStartupStatus("mobile");
-            UpdateTray();
-        })
-        { Checked = currentStartup == "mobile" };
-
-        var startupLast = new ToolStripMenuItem("Remember Last", null, (_, _) =>
-        {
-            Persistence.SetStartupStatus("last");
-            UpdateTray();
-        })
-        { Checked = currentStartup == "last" };
-
-        var startupStatusMenuItem = new ToolStripMenuItem("Default Status on Startup", null, startupOnline, startupOffline, startupMobile, startupLast);
-
-        var restartWithDifferentGameItem = new ToolStripMenuItem("Restart and launch a different game", null, (_, _) =>
-        {
-            var result = MessageBox.Show(
-                "Restart Deceive to launch a different game? This will also stop related games if they are running.",
-                StartupHandler.DeceiveTitle,
-                MessageBoxButtons.OKCancel,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button1
-            );
-
-            if (result is not DialogResult.OK)
-                return;
-
-            Utils.KillProcesses();
-            Thread.Sleep(2000);
-
-            Persistence.SetDefaultLaunchGame(LaunchGame.Prompt);
-            Process.Start(Application.ExecutablePath);
-            Environment.Exit(0);
-        });
-
-        var quitMenuItem = new ToolStripMenuItem("Quit", null, (_, _) =>
-        {
-            var result = MessageBox.Show(
-                "Are you sure you want to stop Deceive? This will also stop related games if they are running.",
-                StartupHandler.DeceiveTitle,
-                MessageBoxButtons.OKCancel,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button1
-            );
-
-            if (result is not DialogResult.OK)
-                return;
-
-            Utils.KillProcesses();
-            SaveStatus();
-            Application.Exit();
-        });
-
-        TrayIcon.ContextMenuStrip = new ContextMenuStrip();
+            new(StartupHandler.DeceiveTitle, enabled: false),
+            new("Enabled", () => Fire(ToggleEnabledAsync), Enabled),
+            new("Status Type", null, false, true,
+                new TrayMenuItem("Online", () => Fire(() => SetStatusAsync("chat")), Status == "chat"),
+                new TrayMenuItem("Offline", () => Fire(() => SetStatusAsync("offline")), Status == "offline"),
+                new TrayMenuItem("Mobile", () => Fire(() => SetStatusAsync("mobile")), Status == "mobile")),
+            new("Default Status on Startup", null, false, true,
+                new TrayMenuItem("Online", () => Persistence.SetStartupStatus("chat"), currentStartup == "chat"),
+                new TrayMenuItem("Offline", () => Persistence.SetStartupStatus("offline"), currentStartup == "offline"),
+                new TrayMenuItem("Mobile", () => Persistence.SetStartupStatus("mobile"), currentStartup == "mobile"),
+                new TrayMenuItem("Remember Last", () => Persistence.SetStartupStatus("last"), currentStartup == "last")),
+            new("Enable lobby chat", () => ConnectToMuc = !ConnectToMuc, ConnectToMuc),
+            new("Log chat traffic (for bug reports)", ToggleTrafficLogging, TrafficLog.Enabled),
+        };
 
 #if DEBUG
-        var sendTestMsg = new ToolStripMenuItem("Send message", null, async (_, _) => { await SendMessageFromFakePlayerAsync("Test"); });
-
-        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[]
-        {
-            aboutMenuItem, EnabledMenuItem, typeMenuItem, startupStatusMenuItem, mucMenuItem, sendTestMsg, restartWithDifferentGameItem, quitMenuItem
-        });
-#else
-        TrayIcon.ContextMenuStrip.Items.AddRange(new ToolStripItem[] { aboutMenuItem, EnabledMenuItem, typeMenuItem, startupStatusMenuItem, mucMenuItem, restartWithDifferentGameItem, quitMenuItem });
+        items.Add(new TrayMenuItem("Send message", () => Fire(() => SendMessageFromFakePlayerAsync("Test"))));
 #endif
+
+        items.Add(new TrayMenuItem("Restart and launch a different game", RestartWithDifferentGame));
+        items.Add(new TrayMenuItem("Quit", Quit));
+        return items;
+    }
+
+    private static void ToggleTrafficLogging()
+    {
+        if (TrafficLog.Enabled)
+        {
+            TrafficLog.Enabled = false;
+            return;
+        }
+
+        var result = MessageBox.Show(
+            "This writes all chat traffic to debug.log, including your private messages and friends list. " +
+            "Only enable it while reproducing a bug, and review the log before sharing it with anyone.\n\n" +
+            "Traffic from before you enable this is not logged, so you may need to restart Deceive to capture the problem. " +
+            "The setting is remembered until you turn it off.",
+            StartupHandler.DeceiveTitle,
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Information,
+            MessageBoxDefaultButton.Button2
+        );
+
+        if (result is DialogResult.OK)
+            TrafficLog.Enabled = true;
+    }
+
+    private static void RestartWithDifferentGame()
+    {
+        var result = MessageBox.Show(
+            "Restart Deceive to launch a different game? This will also stop related games if they are running.",
+            StartupHandler.DeceiveTitle,
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1
+        );
+
+        if (result is not DialogResult.OK)
+            return;
+
+        Utils.KillProcesses();
+        Thread.Sleep(2000);
+
+        Persistence.SetDefaultLaunchGame(LaunchGame.Prompt);
+        Process.Start(Environment.ProcessPath!);
+        Environment.Exit(0);
+    }
+
+    private void Quit()
+    {
+        var result = MessageBox.Show(
+            "Are you sure you want to stop Deceive? This will also stop related games if they are running.",
+            StartupHandler.DeceiveTitle,
+            MessageBoxButtons.OKCancel,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button1
+        );
+
+        if (result is not DialogResult.OK)
+            return;
+
+        Utils.KillProcesses();
+        SaveStatus();
+        TrayIcon?.Close();
+    }
+
+    private async Task ToggleEnabledAsync()
+    {
+        Enabled = !Enabled;
+        await UpdateStatusAsync(Enabled ? Status : "chat");
+        await SendMessageFromFakePlayerAsync(Enabled ? "Deceive is now enabled." : "Deceive is now disabled.");
+    }
+
+    private async Task SetStatusAsync(string status)
+    {
+        Status = status;
+        await UpdateStatusAsync(status);
+        Enabled = true;
+    }
+
+    // Runs an async menu action without blocking the UI thread, logging any failure.
+    private static async void Fire(Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Trace.WriteLine(ex);
+        }
     }
 
     public async Task HandleChatMessage(string content)
     {
-        if (content.ToLower().Contains("offline"))
+        var lower = content.ToLowerInvariant();
+        if (lower.Contains("offline"))
         {
             if (!Enabled)
                 await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
-            OfflineStatus.PerformClick();
+            await SetStatusAsync("offline");
         }
-        else if (content.ToLower().Contains("mobile"))
+        else if (lower.Contains("mobile"))
         {
             if (!Enabled)
                 await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
-            MobileStatus.PerformClick();
+            await SetStatusAsync("mobile");
         }
-        else if (content.ToLower().Contains("online"))
+        else if (lower.Contains("online"))
         {
             if (!Enabled)
                 await SendMessageFromFakePlayerAsync("Deceive is now enabled.");
-            ChatStatus.PerformClick();
+            await SetStatusAsync("chat");
         }
-        else if (content.ToLower().Contains("enable"))
+        else if (lower.Contains("enable"))
         {
             if (Enabled)
                 await SendMessageFromFakePlayerAsync("Deceive is already enabled.");
             else
-                EnabledMenuItem.PerformClick();
+                await ToggleEnabledAsync();
         }
-        else if (content.ToLower().Contains("disable"))
+        else if (lower.Contains("disable"))
         {
             if (!Enabled)
                 await SendMessageFromFakePlayerAsync("Deceive is already disabled.");
             else
-                EnabledMenuItem.PerformClick();
+                await ToggleEnabledAsync();
         }
-        else if (content.ToLower().Contains("status"))
+        else if (lower.Contains("status"))
         {
             if (Status == "chat")
                 await SendMessageFromFakePlayerAsync("You are appearing online.");
             else
                 await SendMessageFromFakePlayerAsync("You are appearing " + Status + ".");
         }
-        else if (content.ToLower().Contains("help"))
+        else if (lower.Contains("help"))
         {
             await SendMessageFromFakePlayerAsync("You can send the following messages to quickly change Deceive settings: online/offline/mobile/enable/disable/status");
         }
@@ -317,13 +342,13 @@ internal class MainController : ApplicationContext
 
     private async Task SendMessageFromFakePlayerAsync(string message)
     {
-        foreach (var connection in Connections)
+        foreach (var connection in ConnectionsSnapshot())
             await connection.SendMessageFromFakePlayerAsync(message);
     }
 
     private async Task UpdateStatusAsync(string newStatus)
     {
-        foreach (var connection in Connections)
+        foreach (var connection in ConnectionsSnapshot())
             await connection.UpdateStatusAsync(newStatus);
 
         if (newStatus == "chat")
@@ -360,9 +385,24 @@ internal class MainController : ApplicationContext
 
     private async Task ShutdownIfNoReconnect()
     {
-        if (ShutdownToken == null)
-            ShutdownToken = new CancellationTokenSource();
-        await Task.Delay(60_000, ShutdownToken.Token);
+        var token = new CancellationTokenSource();
+        var existing = Interlocked.CompareExchange(ref _shutdownToken, token, null);
+        if (existing is not null)
+        {
+            // A shutdown timer is already running.
+            token.Dispose();
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(60_000, token.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A new connection came in.
+            return;
+        }
 
         Trace.WriteLine("Received no new connections after 60s, shutting down.");
         Environment.Exit(0);
